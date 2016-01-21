@@ -52,6 +52,18 @@ def pc(key):
     return "".join([token.capitalize() for token in key.split('_')])
 
 
+def cc(key):
+    """
+    Changes python key into camel case equivalent. For example, 'this_function_name' becomes 'thisFunctionName'.
+
+    :param key:
+    :return:
+    """
+    token = pc(key)
+
+    return "{}{}".format(token[0].lower(), token[1:])
+
+
 def get_api_params(params, module, resource_type, required=False):
     """
     Check for presence of parameters, required or optional and change parameter case for API.
@@ -68,7 +80,7 @@ def get_api_params(params, module, resource_type, required=False):
     for param in params:
         value = module.params.get(param)
         if value:
-            api_params[pc(param)] = value
+            api_params[cc(param)] = value
         else:
             if required:
                 module.fail_json(msg='Parameter {0} required for this action on resource type {1}'.format(param, resource_type))
@@ -78,8 +90,9 @@ def get_api_params(params, module, resource_type, required=False):
 
 # ----------------------------------
 #   Resource management functions
-# ---------------------------------
-def _resource(client, module):
+# ----------------------------------
+
+def get_facts(client, module):
     """
     Needs a little more work....
 
@@ -87,11 +100,17 @@ def _resource(client, module):
     :param module:
     :return:
     """
-    changed = False
 
-    # TODO: everything
+    api_method = getattr(client, 'get_{}'.format(module.params['etype']))
+    api_params = get_api_params(['rest_api_id'], module, module.params['etype'], required=False)
+    # api_params = dict()
 
-    return dict(changed=changed)
+    try:
+        results = api_method(**api_params)
+    except ClientError, e:
+        module.fail_json(msg='Error gathering facts for type {0}: {1}'.format(module.params['etype'], e))
+
+    return results
 
 
 # ----------------------------------
@@ -127,8 +146,9 @@ def main():
     argument_spec = ec2_argument_spec()
     argument_spec.update(dict(
         # state=dict(default='present', required=False, choices=['present', 'absent', 'updated']),
-        name=dict(default=None, required=True),
-        type=dict(required=True, choices=type_choices, default='all')
+        name=dict(default=None, required=False),
+        etype=dict(required=False, choices=type_choices, default='account'),
+        rest_api_id=dict(default=None, required=False),
          )
     )
 
@@ -156,9 +176,9 @@ def main():
     except Exception, e:
         module.fail_json(msg="Connection Error - {0}".format(e))
 
-    response = _resource(client, module)
+    response = get_facts(client, module)
 
-    results = dict(ansible_facts=dict(results=response['results']), changed=response['changed'])
+    results = dict(ansible_facts=dict(results=response), changed=False)
 
     module.exit_json(**results)
 
