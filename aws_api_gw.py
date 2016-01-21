@@ -87,7 +87,7 @@ def main():
         aws_connect_kwargs.update(dict(region=region,
                                        endpoint=endpoint,
                                        conn_type='client',
-                                       resource='s3'
+                                       resource='apigateway'
                                        ))
         client = boto3_conn(module, **aws_connect_kwargs)
     except ClientError, e:
