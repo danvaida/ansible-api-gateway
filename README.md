@@ -1,8 +1,8 @@
 # Ansible Cloud Modules for AWS API Gateway
 
-### v0.0.0
+### v0.1.0
 
-Just starting on this...
+Just starting on this...  Facts gathering now working.
 
 ## Requirements
 - ansible
@@ -10,8 +10,8 @@ Just starting on this...
 - importlib (only for running tests on < python 2.7)
 
 ## Modules
+____
 ### api_gw_facts:
-___
 Gathers facts related to AWS API Gateway
 
 ##### Example Command
