@@ -29,6 +29,37 @@ EXAMPLES = '''
     debug: var=results
 '''
 
+API_CONFIG = dict(
+    account=dict(required_params=[], optional_params=[]),
+    api_key=dict(required_params=[], optional_params=[]), 
+    api_keys=dict(required_params=[], optional_params=[]),
+    base_path_mapping=dict(required_params=[], optional_params=[]), 
+    base_path_mappings=dict(required_params=[], optional_params=[]),
+    client_certificate=dict(required_params=[], optional_params=[]), 
+    client_certificates=dict(required_params=[], optional_params=[]),
+    deployment=dict(required_params=[], optional_params=[]), 
+    deployments=dict(required_params=[], optional_params=[]),
+    domain_name=dict(required_params=[], optional_params=[]), 
+    domain_names=dict(required_params=[], optional_params=[]),
+    integration=dict(required_params=[], optional_params=[]),
+    integration_response=dict(required_params=[], optional_params=[]),
+    method=dict(required_params=[], optional_params=[]),
+    method_response=dict(required_params=[], optional_params=[]),
+    model=dict(required_params=[], optional_params=[]),
+    models=dict(required_params=[], optional_params=[]),
+    model_template=dict(required_params=[], optional_params=[]),
+    resource=dict(required_params=[], optional_params=[]), 
+    resources=dict(required_params=['rest_api_id'], optional_params=['position', 'limit']),
+    rest_api=dict(required_params=[], optional_params=[]), 
+    rest_apis=dict(required_params=[], optional_params=['position', 'limit']),
+    stage=dict(required_params=[], optional_params=[]), 
+    stages=dict(required_params=['rest_api_id'], optional_params=['deployment_id']),
+    sdk=dict(required_params=[], optional_params=[]),
+    )
+
+
+import datetime
+
 try:
     import boto3
     from botocore.exceptions import ClientError
@@ -88,8 +119,31 @@ def get_api_params(params, module, resource_type, required=False):
     return api_params
 
 
+def fix_return(node):
+    """
+    fixup returned dictionary
+    
+    :param node:
+    :return:
+    """
+
+    if isinstance(node, datetime.datetime):
+        node_value = str(node)
+
+    elif isinstance(node, list):
+        node_value = [fix_return(item) for item in node]
+
+    elif isinstance(node, dict):
+        node_value = dict([(item, fix_return(node[item])) for item in node.keys()])
+
+    else:
+        node_value = node
+
+    return node_value
+
+
 # ----------------------------------
-#   Resource management functions
+#   Resource management function
 # ----------------------------------
 
 def get_facts(client, module):
@@ -100,17 +154,18 @@ def get_facts(client, module):
     :param module:
     :return:
     """
+    resource_type = module.params['type']
 
-    api_method = getattr(client, 'get_{}'.format(module.params['etype']))
-    api_params = get_api_params(['rest_api_id'], module, module.params['etype'], required=False)
-    # api_params = dict()
+    api_method = getattr(client, 'get_{}'.format(resource_type))
+    api_params = get_api_params(API_CONFIG[resource_type]['required_params'], module, resource_type, required=True)
+    api_params.update(get_api_params(API_CONFIG[resource_type]['optional_params'], module, resource_type, required=False))
 
     try:
         results = api_method(**api_params)
     except ClientError, e:
-        module.fail_json(msg='Error gathering facts for type {0}: {1}'.format(module.params['etype'], e))
+        module.fail_json(msg='Error gathering facts for type {0}: {1}'.format(module.params['type'], e))
 
-    return results
+    return fix_return(results)
 
 
 # ----------------------------------
@@ -125,30 +180,13 @@ def main():
 
     """
 
-    type_choices = ['account',
-                    'api_key', 'api_keys',
-                    'base_path_mapping', 'base_path_mappings',
-                    'client_certificate', 'client_certificates',
-                    'deployment', 'deployments',
-                    'domain_name', 'domain_names',
-                    'integration',
-                    'integration_response',
-                    'method,'
-                    'method_response',
-                    'model', 'models',
-                    'model_template',
-                    'resource', 'resources',
-                    'rest_api', 'rest_apis',
-                    'stage', 'stages',
-                    'sdk'
-                    ]
-
     argument_spec = ec2_argument_spec()
     argument_spec.update(dict(
         # state=dict(default='present', required=False, choices=['present', 'absent', 'updated']),
         name=dict(default=None, required=False),
-        etype=dict(required=False, choices=type_choices, default='account'),
+        type=dict(required=False, choices=API_CONFIG.keys(), default='account'),
         rest_api_id=dict(default=None, required=False),
+        limit=dict(type='int', default=None, required=False)
          )
     )
 
@@ -184,6 +222,7 @@ def main():
 
 
 # ansible import module(s) kept at ~eof as recommended
+
 from ansible.module_utils.basic import *
 from ansible.module_utils.ec2 import *
 
