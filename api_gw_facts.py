@@ -30,32 +30,82 @@ EXAMPLES = '''
 '''
 
 API_CONFIG = dict(
-    account=dict(required_params=[], optional_params=[]),
-    api_key=dict(required_params=[], optional_params=[]), 
-    api_keys=dict(required_params=[], optional_params=[]),
-    base_path_mapping=dict(required_params=[], optional_params=[]), 
-    base_path_mappings=dict(required_params=[], optional_params=[]),
-    client_certificate=dict(required_params=[], optional_params=[]), 
-    client_certificates=dict(required_params=[], optional_params=[]),
-    deployment=dict(required_params=[], optional_params=[]), 
-    deployments=dict(required_params=[], optional_params=[]),
-    domain_name=dict(required_params=[], optional_params=[]), 
-    domain_names=dict(required_params=[], optional_params=[]),
-    integration=dict(required_params=[], optional_params=[]),
-    integration_response=dict(required_params=[], optional_params=[]),
-    method=dict(required_params=[], optional_params=[]),
-    method_response=dict(required_params=[], optional_params=[]),
-    model=dict(required_params=[], optional_params=[]),
-    models=dict(required_params=[], optional_params=[]),
-    model_template=dict(required_params=[], optional_params=[]),
-    resource=dict(required_params=[], optional_params=[]), 
-    resources=dict(required_params=['rest_api_id'], optional_params=['position', 'limit']),
-    rest_api=dict(required_params=[], optional_params=[]), 
-    rest_apis=dict(required_params=[], optional_params=['position', 'limit']),
-    stage=dict(required_params=[], optional_params=[]), 
-    stages=dict(required_params=['rest_api_id'], optional_params=['deployment_id']),
-    sdk=dict(required_params=[], optional_params=[]),
+    account=dict(
+        get=dict(required=[], optional=[]),
+    ),
+    api_key=dict(
+        get=dict(required=['api_key'], optional=[]),
+    ),
+    api_keys=dict(
+        get=dict(required=[], optional=['position', 'limit']),
+    ),
+    base_path_mapping=dict(
+        get=dict(required=['domain_name', 'base_path'], optional=[]),
+    ),
+    base_path_mappings=dict(
+        get=dict(required=['domain_name'], optional=['position', 'limit']),
+    ),
+    client_certificate=dict(
+        get=dict(required=['client_certificate_id'], optional=[]),
+    ),
+    client_certificates=dict(
+        get=dict(required=[], optional=['position', 'limit']),
+    ),
+    deployment=dict(
+        get=dict(required=['rest_api_id', 'deployment_id'], optional=[]),
+    ),
+    deployments=dict(
+        get=dict(required=['rest_api_id'], optional=['position', 'limit']),
+    ),
+    domain_name=dict(
+        get=dict(required=['domain_name'], optional=[]),
+    ),
+    domain_names=dict(
+        get=dict(required=[], optional=['position', 'limit']),
+    ),
+    integration=dict(
+        get=dict(required=['rest_api_id', 'resource_id', 'http_method'], optional=[]),
+    ),
+    integration_response=dict(
+        get=dict(required=['rest_api_id', 'resource_id', 'http_method', 'status_code'], optional=[]),
+    ),
+    method=dict(
+         get=dict(required=['rest_api_id', 'resource_id', 'http_method'], optional=[]),
+    ),
+    method_response=dict(
+        get=dict(required=['rest_api_id', 'resource_id', 'http_method', 'status_code'], optional=[]),
+    ),
+    model=dict(
+        get=dict(required=['rest_api_id', 'model_name'], optional=['flatten']),
+    ),
+    models=dict(
+        get=dict(required=['rest_api_id'], optional=['position', 'limit']),
+    ),
+    model_template=dict(
+         get=dict(required=['rest_api_id', 'model_name'], optional=[]),
+    ),
+    resource=dict(
+         get=dict(required=['rest_api_id', 'resource_id'], optional=[]),
+    ),
+    resources=dict(
+        get=dict(required=['rest_api_id'], optional=['position', 'limit']),
+    ),
+    rest_api=dict(
+        get=dict(required=['rest_api_id'], optional=[]),
+    ),
+    rest_apis=dict(
+        get=dict(required=[], optional=['position', 'limit']),
+    ),
+    stage=dict(
+       get=dict(required=['rest_api_id', 'stage_name'], optional=[]),
+    ),
+    stages=dict(
+        get=dict(required=['rest_api_id'], optional=['deployment_id']),
+    ),
+    sdk=dict(
+        get=dict(required=['rest_api_id', 'stage_name', 'sdk_type'], optional=['parameters']),
     )
+)
 
 
 import datetime
@@ -157,13 +207,15 @@ def get_facts(client, module):
     resource_type = module.params['type']
 
     api_method = getattr(client, 'get_{}'.format(resource_type))
-    api_params = get_api_params(API_CONFIG[resource_type]['required_params'], module, resource_type, required=True)
-    api_params.update(get_api_params(API_CONFIG[resource_type]['optional_params'], module, resource_type, required=False))
+
+    method_params = API_CONFIG[resource_type]['get']
+    api_params = get_api_params(method_params['required'], module, resource_type, required=True)
+    api_params.update(get_api_params(method_params['optional'], module, resource_type, required=False))
 
     try:
         results = api_method(**api_params)
     except ClientError, e:
-        module.fail_json(msg='Error gathering facts for type {0}: {1}'.format(module.params['type'], e))
+        module.fail_json(msg='Error gathering facts for type {0}: {1}'.format(resource_type, e))
 
     return fix_return(results)
 
@@ -182,17 +234,28 @@ def main():
 
     argument_spec = ec2_argument_spec()
     argument_spec.update(dict(
-        # state=dict(default='present', required=False, choices=['present', 'absent', 'updated']),
-        name=dict(default=None, required=False),
         type=dict(required=False, choices=API_CONFIG.keys(), default='account'),
         rest_api_id=dict(default=None, required=False),
-        limit=dict(type='int', default=None, required=False)
+        limit=dict(type='int', default=None, required=False),
+        position=dict(default=None, required=False),
+        resource_id=dict(default=None, required=False),
+        stage_name=dict(default=None, required=False),
+        sdk_type=dict(default=None, required=False),
+        parameters=dict(type='dict', default=None, required=False),
+        flatten=dict(type='boolean', default=None, required=False),
+        http_method=dict(default=None, required=False),
+        status_code=dict(default=None, required=False),
+        deployment_id=dict(default=None, required=False),
+        domain_name=dict(default=None, required=False),
+        model_name=dict(default=None, required=False),
+        base_path=dict(default=None, required=False),
+        client_certificate_id=dict(default=None, required=False),
          )
     )
 
     module = AnsibleModule(
         argument_spec=argument_spec,
-        supports_check_mode=False,
+        supports_check_mode=True,
         mutually_exclusive=[],
         required_together=[]
     )
