@@ -73,10 +73,20 @@ API_CONFIG = dict(
          get=dict(required=['rest_api_id', 'resource_id'], optional=[]),
     ),
     rest_api=dict(
-        get=dict(required=['rest_api_id'], optional=[]),
+        create=dict(required=['name'], optional=['description', 'clone_from'], method='create'),
+        read=dict(required=['rest_api_id'], optional=[], method='get'),
+        update=dict(required=['rest_api_id', 'patch_operations'], optional=[], method='update'),
+        delete=dict(required=['rest_api_id'], optional=[], method='delete'),
     ),
     stage=dict(
-       get=dict(required=['rest_api_id', 'stage_name'], optional=[]),
+        get=dict(required=['rest_api_id', 'stage_name'], optional=[]),
+        create=dict(required=['rest_api_id', 'stage_name', 'deployment_id'],
+                    optional=['description', 'cache_cluster_enabled', 'cache_cluster_size', 'variables'],
+                    method='create'),
+        read=dict(required=['rest_api_id', 'stage_name'], optional=[], method='get'),
+        update=dict(required=['rest_api_id', 'stage_name', 'patch_operations'], optional=[], method='update'),
+        delete=dict(required=['rest_api_id'], optional=[], method='delete'),
+
     )
 )
 
@@ -213,7 +223,8 @@ def get_facts(client, module):
             api_method = getattr(client, '{}_{}'.format(method_params['method'], resource_type))
 
             try:
-                results = api_method(**api_params)
+                if not module.check_mode:
+                    results = api_method(**api_params)
                 changed = True
             except ClientError, e:
                 module.fail_json(msg='Error deleting type {0}: {1}'.format(resource_type, e))
@@ -225,7 +236,8 @@ def get_facts(client, module):
             api_method = getattr(client, '{}_{}'.format(method_params['method'], resource_type))
 
             try:
-                results = api_method(**api_params)
+                if not module.check_mode:
+                    results = api_method(**api_params)
                 changed = True
             except ClientError, e:
                 module.fail_json(msg='Error generating type {0}: {1}'.format(resource_type, e))
@@ -236,7 +248,8 @@ def get_facts(client, module):
             api_method = getattr(client, '{}_{}'.format(method_params['method'], resource_type))
 
             try:
-                results = api_method(**api_params)
+                if not module.check_mode:
+                    results = api_method(**api_params)
                 changed = True
             except ClientError, e:
                 module.fail_json(msg='Error updating type {0}: {1}'.format(resource_type, e))
@@ -269,8 +282,8 @@ def main():
         parameters=dict(type='dict', default=None, required=False),
         stage_keys=dict(type='list', default=None, required=False),
         patch_operations=dict(type='list', default=None, required=False),
-        flatten=dict(type='boolean', default=None, required=False),
-        enabled=dict(type='boolean', default=None, required=False),
+        flatten=dict(type='bool', default=None, required=False),
+        enabled=dict(type='bool', default=None, required=False),
         http_method=dict(default=None, required=False),
         status_code=dict(default=None, required=False),
         deployment_id=dict(default=None, required=False),
@@ -280,6 +293,10 @@ def main():
         name=dict(default=None, required=False),
         description=dict(default=None, required=False),
         client_certificate_id=dict(default=None, required=False),
+        clone_from=dict(default=None, required=False),
+        cache_cluster_enabled=dict(type='bool', default=None, required=False),
+        cache_cluster_size=dict(default=None, required=False, choices=['0.5', '1.6', '13.5', '28.4', '58.2', '118', '237']),
+        variables=dict(type='dict', default=None, required=False),
          )
     )
 
