@@ -37,7 +37,7 @@ API_CONFIG = dict(
         delete=dict(required=['api_key'], optional=[], method='delete'),
     ),
     base_path_mapping=dict(
-        get=dict(required=['domain_name', 'base_path'], optional=[]),
+        read=dict(required=['domain_name', 'base_path'], optional=[], method='get'),
     ),
     client_certificate=dict(
         create=dict(required=['description'], optional=[], method='generate'),
@@ -46,31 +46,39 @@ API_CONFIG = dict(
         delete=dict(required=['client_certificate_id'], optional=[], method='delete'),
     ),
     deployment=dict(
-        get=dict(required=['rest_api_id', 'deployment_id'], optional=[]),
+        read=dict(required=['rest_api_id', 'deployment_id'], optional=[], method='get'),
     ),
     domain_name=dict(
-        get=dict(required=['domain_name'], optional=[]),
+        read=dict(required=['domain_name'], optional=[], method='get'),
     ),
     integration=dict(
-        get=dict(required=['rest_api_id', 'resource_id', 'http_method'], optional=[]),
+        read=dict(required=['rest_api_id', 'resource_id', 'http_method'], optional=[], method='get'),
     ),
     integration_response=dict(
-        get=dict(required=['rest_api_id', 'resource_id', 'http_method', 'status_code'], optional=[]),
+        read=dict(required=['rest_api_id', 'resource_id', 'http_method', 'status_code'], optional=[], method='get'),
     ),
     method=dict(
-         get=dict(required=['rest_api_id', 'resource_id', 'http_method'], optional=[]),
+        create=dict(required=['rest_api_id', 'resource_id', 'http_method', 'authorization_type'],
+                     optional=['api_key_required', 'request_parameters', 'request_models'],
+                     method='put'),
+        read=dict(required=['rest_api_id', 'resource_id', 'http_method'], optional=[], method='get'),
+        update=dict(required=['rest_api_id', 'resource_id', 'http_method', 'patch_operations'], optional=[], method='update'),
+        delete=dict(required=['rest_api_id', 'resource_id', 'http_method'], optional=[], method='delete'),
     ),
     method_response=dict(
-        get=dict(required=['rest_api_id', 'resource_id', 'http_method', 'status_code'], optional=[]),
+        read=dict(required=['rest_api_id', 'resource_id', 'http_method', 'status_code'], optional=[], method='get'),
     ),
     model=dict(
-        get=dict(required=['rest_api_id', 'model_name'], optional=['flatten']),
+        read=dict(required=['rest_api_id', 'model_name'], optional=['flatten'], method='get'),
     ),
     model_template=dict(
-         get=dict(required=['rest_api_id', 'model_name'], optional=[]),
+        read=dict(required=['rest_api_id', 'model_name'], optional=[], method='get'),
     ),
     resource=dict(
-         get=dict(required=['rest_api_id', 'resource_id'], optional=[]),
+        create=dict(required=['rest_api_id', 'parent_id', 'path_part'], optional=[], method='create'),
+        read=dict(required=['rest_api_id', 'resource_id'], optional=[], method='get'),
+        update=dict(required=['rest_api_id', 'resource_id', 'patch_operations'], optional=[], method='update'),
+        delete=dict(required=['rest_api_id', 'resource_id'], optional=[], method='delete'),
     ),
     rest_api=dict(
         create=dict(required=['name'], optional=['description', 'clone_from'], method='create'),
@@ -79,7 +87,6 @@ API_CONFIG = dict(
         delete=dict(required=['rest_api_id'], optional=[], method='delete'),
     ),
     stage=dict(
-        get=dict(required=['rest_api_id', 'stage_name'], optional=[]),
         create=dict(required=['rest_api_id', 'stage_name', 'deployment_id'],
                     optional=['description', 'cache_cluster_enabled', 'cache_cluster_size', 'variables'],
                     method='create'),
@@ -284,19 +291,25 @@ def main():
         patch_operations=dict(type='list', default=None, required=False),
         flatten=dict(type='bool', default=None, required=False),
         enabled=dict(type='bool', default=None, required=False),
+        api_key_required=dict(type='bool', default=None, required=False),
         http_method=dict(default=None, required=False),
+        authorization_type=dict(default=None, required=False),
         status_code=dict(default=None, required=False),
         deployment_id=dict(default=None, required=False),
         domain_name=dict(default=None, required=False),
         model_name=dict(default=None, required=False),
         base_path=dict(default=None, required=False),
         name=dict(default=None, required=False),
+        parent_id=dict(default=None, required=False),
+        path_part=dict(default=None, required=False),
         description=dict(default=None, required=False),
         client_certificate_id=dict(default=None, required=False),
         clone_from=dict(default=None, required=False),
         cache_cluster_enabled=dict(type='bool', default=None, required=False),
         cache_cluster_size=dict(default=None, required=False, choices=['0.5', '1.6', '13.5', '28.4', '58.2', '118', '237']),
         variables=dict(type='dict', default=None, required=False),
+        request_parameters=dict(type='dict', default=None, required=False),
+        request_models=dict(type='dict', default=None, required=False),
          )
     )
 
