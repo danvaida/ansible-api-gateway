@@ -247,7 +247,7 @@ def get_facts(client, module):
                     results = api_method(**api_params)
                 changed = True
             except ClientError, e:
-                module.fail_json(msg='Error generating type {0}: {1}'.format(resource_type, e))
+                module.fail_json(msg='Error creating type {0}: {1}'.format(resource_type, e))
         else:
             method_params = API_CONFIG[resource_type]['update']
             api_params = get_api_params(method_params['required'], module, resource_type, required=True)
@@ -339,7 +339,7 @@ def main():
 
     response = get_facts(client, module)
 
-    results = dict(ansible_facts=dict(results=response), changed=False)
+    results = dict(ansible_facts=response['results'], changed=response['changed'])
 
     module.exit_json(**results)
 
