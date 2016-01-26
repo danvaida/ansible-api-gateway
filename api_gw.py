@@ -46,21 +46,40 @@ API_CONFIG = dict(
         delete=dict(required=['client_certificate_id'], optional=[], method='delete'),
     ),
     deployment=dict(
+        create=dict(required=['rest_api_id', 'stage_name'],
+                    optional=['stage_description', 'description', 'cache_cluster_enabled', 'cache_cluster_size', 'variables'],
+                    method='create'
+                    ),
         read=dict(required=['rest_api_id', 'deployment_id'], optional=[], method='get'),
+        update=dict(required=['rest_api_id', 'deployment_id', 'patch_operations'], optional=[], method='update'),
+        delete=dict(required=['rest_api_id', 'deployment_id'], optional=[], method='delete'),
     ),
     domain_name=dict(
+        create=dict(required=['domain_name', 'certificate_name', 'certificate_body', 'certificate_private_key', 'certificate_chain'],
+                    optional=[],
+                    method='create'
+                    ),
         read=dict(required=['domain_name'], optional=[], method='get'),
+        update=dict(required=['domain_name', 'patch_operations'], optional=[], method='update'),
+        delete=dict(required=['domain_name'], optional=[], method='delete'),
     ),
     integration=dict(
+        create=dict(required=['rest_api_id', 'resource_id', 'http_method', 'type'],
+                    optional=['integration_http_method', 'uri', 'credentials', 'request_parameters', 'request_templates', 'cache_namespace', 'cache_key_parameters'],
+                    method='put'
+                    ),
         read=dict(required=['rest_api_id', 'resource_id', 'http_method'], optional=[], method='get'),
+        update=dict(required=['rest_api_id', 'resource_id', 'http_method', 'patch_operations'], optional=[], method='update'),
+        delete=dict(required=['rest_api_id', 'resource_id', 'http_method'], optional=[], method='delete'),
     ),
     integration_response=dict(
         read=dict(required=['rest_api_id', 'resource_id', 'http_method', 'status_code'], optional=[], method='get'),
     ),
     method=dict(
         create=dict(required=['rest_api_id', 'resource_id', 'http_method', 'authorization_type'],
-                     optional=['api_key_required', 'request_parameters', 'request_models'],
-                     method='put'),
+                    optional=['api_key_required', 'request_parameters', 'request_models'],
+                    method='put'
+                    ),
         read=dict(required=['rest_api_id', 'resource_id', 'http_method'], optional=[], method='get'),
         update=dict(required=['rest_api_id', 'resource_id', 'http_method', 'patch_operations'], optional=[], method='update'),
         delete=dict(required=['rest_api_id', 'resource_id', 'http_method'], optional=[], method='delete'),
@@ -194,10 +213,9 @@ def get_facts(client, module):
     :param module:
     :return:
     """
-    resource_type = module.params['type']
+    resource_type = module.params['resource_type']
     results = dict()
     changed = False
-    api_params = dict()
     current_state = None
 
     state = module.params.get('state')
@@ -279,12 +297,13 @@ def main():
     argument_spec = ec2_argument_spec()
     argument_spec.update(dict(
         state=dict(default='present', required=False, choices=['present', 'absent', 'updated']),
-        type=dict(required=False, choices=API_CONFIG.keys(), default='account'),
+        resource_type=dict(required=False, choices=API_CONFIG.keys(), default='account'),
         rest_api_id=dict(default=None, required=False),
         limit=dict(type='int', default=None, required=False),
         position=dict(default=None, required=False),
         resource_id=dict(default=None, required=False),
         stage_name=dict(default=None, required=False),
+        stage_description=dict(default=None, required=False),
         sdk_type=dict(default=None, required=False),
         parameters=dict(type='dict', default=None, required=False),
         stage_keys=dict(type='list', default=None, required=False),
@@ -297,6 +316,10 @@ def main():
         status_code=dict(default=None, required=False),
         deployment_id=dict(default=None, required=False),
         domain_name=dict(default=None, required=False),
+        certificate_name=dict(default=None, required=False),
+        certificate_body=dict(default=None, required=False),
+        certificate_private_key=dict(default=None, required=False),
+        certificate_chain=dict(default=None, required=False),
         model_name=dict(default=None, required=False),
         base_path=dict(default=None, required=False),
         name=dict(default=None, required=False),
@@ -310,7 +333,14 @@ def main():
         variables=dict(type='dict', default=None, required=False),
         request_parameters=dict(type='dict', default=None, required=False),
         request_models=dict(type='dict', default=None, required=False),
-         )
+        request_templates=dict(type='dict', default=None, required=False),
+        cache_namespace=dict(default=None, required=False),
+        cache_key_parameters=dict(type='list', default=None, required=False),
+        integration_http_method=dict(default=None, required=False),
+        uri=dict(default=None, required=False),
+        credentials=dict(default=None, required=False),
+        type=dict(default=None, required=False, choices=['HTTP', 'AWS', 'MOCK']),
+        )
     )
 
     module = AnsibleModule(

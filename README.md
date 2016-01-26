@@ -16,3 +16,10 @@ Gathers facts related to AWS API Gateway
 
 ##### Example Command
 `> ansible localhost -m api_gw_facts`
+
+____
+### api_gw:
+Manages AWS API Gateway resources
+
+##### Example Command
+`> ansible localhost -m api_gw -a"resource_type=rest_api name=funky_foo state=present"`
