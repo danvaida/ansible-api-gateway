@@ -17,6 +17,12 @@
 DOCUMENTATION = '''
 ---
 module: api_gw
+short_description: Creates, updates or deletes AWS API Gateway resources.
+description:
+    - This module allows the management of AWS API Gateway resources via the Ansible framework.
+version_added: "2.0"
+author: Pierre Jodouin (@pjodouin)
+options:
 
 '''
 
@@ -115,7 +121,6 @@ API_CONFIG = dict(
 
     )
 )
-
 
 import datetime
 
