@@ -171,7 +171,7 @@ def cc(key):
     return "{}{}".format(token[0].lower(), token[1:])
 
 
-def get_api_params(params, module, resource_type, required=False):
+def get_api_params(module):
     """
     Check for presence of parameters, required or optional and change parameter case for API.
 
@@ -181,16 +181,13 @@ def get_api_params(params, module, resource_type, required=False):
     :param required:
     :return:
     """
-
+    params = module.params['resource_params']
     api_params = dict()
 
-    for param in params:
-        value = module.params.get(param)
+    for key in params.keys():
+        value = params(key)
         if value:
-            api_params[cc(param)] = value
-        else:
-            if required:
-                module.fail_json(msg='Parameter {0} required for this action on resource type {1}'.format(param, resource_type))
+            api_params[cc(key)] = value
 
     return api_params
 
@@ -222,7 +219,7 @@ def fix_return(node):
 #   Resource management function
 # ----------------------------------
 
-def get_facts(client, module):
+def invoke_api(client, module):
     """
     Needs a little more work....
 
@@ -241,9 +238,7 @@ def get_facts(client, module):
     if not api_method:
         module.fail_json(msg="Programming error: resource {} has no get method.".format(resource_type))
 
-    method_params = API_CONFIG[resource_type]['read']
-    api_params = get_api_params(method_params['required'], module, resource_type, required=True)
-    api_params.update(get_api_params(method_params['optional'], module, resource_type, required=False))
+    api_params = get_api_params(module)
 
     try:
         results = api_method(**api_params)
@@ -260,8 +255,6 @@ def get_facts(client, module):
     else:
         if state == 'absent':
             method_params = API_CONFIG[resource_type]['delete']
-            api_params = get_api_params(method_params['required'], module, resource_type, required=True)
-            api_params.update(get_api_params(method_params['optional'], module, resource_type, required=False))
             api_method = getattr(client, '{}_{}'.format(method_params['method'], resource_type))
 
             try:
@@ -273,8 +266,6 @@ def get_facts(client, module):
 
         elif state == 'present':
             method_params = API_CONFIG[resource_type]['create']
-            api_params = get_api_params(method_params['required'], module, resource_type, required=True)
-            api_params.update(get_api_params(method_params['optional'], module, resource_type, required=False))
             api_method = getattr(client, '{}_{}'.format(method_params['method'], resource_type))
 
             try:
@@ -285,8 +276,6 @@ def get_facts(client, module):
                 module.fail_json(msg='Error creating type {0}: {1}'.format(resource_type, e))
         else:
             method_params = API_CONFIG[resource_type]['update']
-            api_params = get_api_params(method_params['required'], module, resource_type, required=True)
-            api_params.update(get_api_params(method_params['optional'], module, resource_type, required=False))
             api_method = getattr(client, '{}_{}'.format(method_params['method'], resource_type))
 
             try:
@@ -315,50 +304,7 @@ def main():
     argument_spec.update(dict(
         state=dict(default='present', required=False, choices=['present', 'absent', 'updated']),
         resource_type=dict(required=False, choices=API_CONFIG.keys(), default='account'),
-        rest_api_id=dict(default=None, required=False),
-        limit=dict(type='int', default=None, required=False),
-        position=dict(default=None, required=False),
-        resource_id=dict(default=None, required=False),
-        stage_name=dict(default=None, required=False),
-        stage_description=dict(default=None, required=False),
-        sdk_type=dict(default=None, required=False),
-        parameters=dict(type='dict', default=None, required=False),
-        stage_keys=dict(type='list', default=None, required=False),
-        patch_operations=dict(type='list', default=None, required=False),
-        flatten=dict(type='bool', default=None, required=False),
-        enabled=dict(type='bool', default=None, required=False),
-        api_key_required=dict(type='bool', default=None, required=False),
-        http_method=dict(default=None, required=False),
-        authorization_type=dict(default=None, required=False),
-        status_code=dict(default=None, required=False),
-        deployment_id=dict(default=None, required=False),
-        domain_name=dict(default=None, required=False),
-        certificate_name=dict(default=None, required=False),
-        certificate_body=dict(default=None, required=False),
-        certificate_private_key=dict(default=None, required=False),
-        certificate_chain=dict(default=None, required=False),
-        model_name=dict(default=None, required=False),
-        base_path=dict(default=None, required=False),
-        name=dict(default=None, required=False),
-        parent_id=dict(default=None, required=False),
-        path_part=dict(default=None, required=False),
-        description=dict(default=None, required=False),
-        client_certificate_id=dict(default=None, required=False),
-        clone_from=dict(default=None, required=False),
-        cache_cluster_enabled=dict(type='bool', default=None, required=False),
-        cache_cluster_size=dict(default=None, required=False, choices=['0.5', '1.6', '13.5', '28.4', '58.2', '118', '237']),
-        variables=dict(type='dict', default=None, required=False),
-        request_parameters=dict(type='dict', default=None, required=False),
-        request_models=dict(type='dict', default=None, required=False),
-        request_templates=dict(type='dict', default=None, required=False),
-        response_parameters=dict(type='dict', default=None, required=False),
-        response_models=dict(type='dict', default=None, required=False),
-        cache_namespace=dict(default=None, required=False),
-        cache_key_parameters=dict(type='list', default=None, required=False),
-        integration_http_method=dict(default=None, required=False),
-        uri=dict(default=None, required=False),
-        credentials=dict(default=None, required=False),
-        type=dict(default=None, required=False, choices=['HTTP', 'AWS', 'MOCK']),
+        resource_parameters=dict(required=True, default=None)
         )
     )
 
@@ -386,7 +332,7 @@ def main():
     except Exception, e:
         module.fail_json(msg="Connection Error - {0}".format(e))
 
-    response = get_facts(client, module)
+    response = invoke_api(client, module)
 
     results = dict(ansible_facts=response['results'], changed=response['changed'])
 
