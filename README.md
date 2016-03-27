@@ -1,8 +1,9 @@
-# Ansible Cloud Modules for AWS API Gateway
+# Ansible Cloud Modules for AWS API Gateway -- OAI/Swagger
 
-### v0.1.0
+### v0.1.0 [![Build Status](https://travis-ci.org/pjodouin/ansible-api-gateway.svg)](https://travis-ci.org/pjodouin/ansible-api-gateway)
 
-Just starting on this...  Facts gathering now working.
+Just starting on this.  The module will use the [Open API Initiative (OAI)](http://swagger.io/specification/) specification,
+formerly known as "The Swagger Specification" along with AWS integration extensions to define the APIs.
 
 ## Requirements
 - ansible
@@ -22,4 +23,3 @@ ____
 Manages AWS API Gateway resources
 
 ##### Example Command
-`> ansible localhost -m api_gw -a"resource_type=rest_api name=funky_foo state=present"`
