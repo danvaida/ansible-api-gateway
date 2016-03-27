@@ -146,7 +146,19 @@ API_CONFIG = dict(
 
     )
 )
-
+ SWAGGER_SPEC = dict(
+     swagger=dict(required=True),
+     info=dict(required=True),
+     basePath=dict(required=False),
+     paths=dict(required=True, type='dict'),
+     schemes=dict(required=False),
+     definitions=dict(required=False),
+     host=dict(required=False),
+     parameters=dict(required=False),
+     responses=dict(required=False),
+     consumes=dict(required=False),
+     produces=dict(required=False),
+ )
 
 # ----------------------------------
 #          Helper functions
@@ -199,7 +211,7 @@ def get_api_params(module):
 def fix_return(node):
     """
     fixup returned dictionary
-    
+
     :param node:
     :return:
     """
@@ -223,7 +235,7 @@ def fix_return(node):
 #   Resource management function
 # ----------------------------------
 
-def invoke_api(client, module, api_spec):
+def invoke_api(client, module, swagger_spec):
     """
     Needs a little more work....
 
@@ -289,9 +301,21 @@ def invoke_api(client, module, api_spec):
     #         except ClientError, e:
     #             module.fail_json(msg='Error updating type {0}: {1}'.format(resource_type, e))
 
-    results = api_spec
+    if not isinstance(swagger_spec, dict):
+        module.fail_json(msg='Invalid Swagger specification: {0}'.format(swagger_spec))
 
-    return dict(changed=changed, results=dict(api_gw_facts=fix_return(results)))
+    check_list = []
+    for key in SWAGGER_SPEC.keys()
+        if swagger_spec.get(key):
+            check_list.append('element {0} present - OK'.format(swagger_spec[key]))
+        else:
+            if SWAGGER_SPEC['required']
+                check_list.append('element {0} absent but required - Error'.format(swagger_spec[key]))
+            else:
+                check_list.append('element {0} absent - OK'.format(swagger_spec[key]))
+
+
+    return dict(changed=changed, results=dict(api_gw_facts=fix_return(check_list)))
 
 
 # ----------------------------------

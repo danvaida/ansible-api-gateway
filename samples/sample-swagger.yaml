@@ -3,6 +3,15 @@ swagger: "2.0"
 info:
   version: "2016-03-26T21:15:49Z"
   title: "LambdaMicroservice"
+  description: Sample swagger API definition used to develop the module.
+  contact:
+    name: API Support
+    url: http://www.swagger.io/support
+    email: support@swagger.io
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.1
 host: "nnnnnnnnn.execute-api.us-east-1.amazonaws.com"
 basePath: "/Dev"
 schemes:
