@@ -146,19 +146,26 @@ API_CONFIG = dict(
 
     )
 )
- SWAGGER_SPEC = dict(
-     swagger=dict(required=True),
-     info=dict(required=True),
-     basePath=dict(required=False),
-     paths=dict(required=True, type='dict'),
-     schemes=dict(required=False),
-     definitions=dict(required=False),
-     host=dict(required=False),
-     parameters=dict(required=False),
-     responses=dict(required=False),
-     consumes=dict(required=False),
-     produces=dict(required=False),
+
+SWAGGER_SPEC = dict(
+    swagger=dict(required=True),
+    info=dict(required=True),
+    basePath=dict(required=False),
+    paths=dict(required=True, type='dict', obj='path'),
+    schemes=dict(required=False),
+    definitions=dict(required=False),
+    securityDefinitions=dict(required=False),
+    host=dict(required=False),
+    parameters=dict(required=False),
+    responses=dict(required=False),
+    consumes=dict(required=False),
+    produces=dict(required=False),
  )
+
+SWAGGER_OBJ = dict(
+    path=dict(type='dict', )
+
+)
 
 # ----------------------------------
 #          Helper functions
@@ -304,18 +311,47 @@ def invoke_api(client, module, swagger_spec):
     if not isinstance(swagger_spec, dict):
         module.fail_json(msg='Invalid Swagger specification: {0}'.format(swagger_spec))
 
-    check_list = []
-    for key in SWAGGER_SPEC.keys()
-        if swagger_spec.get(key):
-            check_list.append('element {0} present - OK'.format(swagger_spec[key]))
-        else:
-            if SWAGGER_SPEC['required']
-                check_list.append('element {0} absent but required - Error'.format(swagger_spec[key]))
-            else:
-                check_list.append('element {0} absent - OK'.format(swagger_spec[key]))
+    check_list = check_node('swagger', swagger_spec, 0)
+
+
+    # for key in SWAGGER_SPEC.keys():
+    #     if swagger_spec.get(key):
+    #         check_list.append(check_node(swagger_spec[key], 1))
+            # check_list.append("element '{0}' present - OK".format(key))
+            # if isinstance(swagger_spec[key], dict):
+            #     for sub_key in swagger_spec[key].keys():
+            #         check_list.append("    sub-element '{0}' found - OK".format(sub_key))
+            #
+            #         if isinstance(swagger_spec[key][sub_key], dict):
+            #             for sub_sub_key in swagger_spec[key][sub_key].keys():
+            #                 check_list.append("        sub-sub-element '{0}' found - OK".format(sub_sub_key))
+
+        # else:
+        #     if SWAGGER_SPEC[key].get('required'):
+        #         check_list.append("element '{0}' absent but required - Error".format(key))
+        #     else:
+        #         check_list.append("element '{0}' absent - OK".format(key))
 
 
     return dict(changed=changed, results=dict(api_gw_facts=fix_return(check_list)))
+
+
+def check_node(key_name, node, level):
+
+    check_list = []
+    level += 1
+
+    if isinstance(node, dict):
+        check_list.append("{0}{1}:{2}".format(' '*level*2,  key_name, ' '*80))
+
+        for key in node.keys():
+            # check_list.append("{0}{1}:{2}".format(' '*prefix,  key, ' '*(50-prefix)))
+
+            check_list.extend(check_node(key, node[key], level))
+    else:
+        check_list.append("{0}{1}: {2}{3}".format(' '*level*2,  key_name, node, ' '*80))
+
+    return check_list
 
 
 # ----------------------------------
