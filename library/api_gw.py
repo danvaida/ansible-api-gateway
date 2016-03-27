@@ -14,6 +14,19 @@
 # You should have received a copy of the GNU General Public License
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 
+import datetime
+import yaml
+import json
+
+try:
+    import boto3
+    import boto
+    from botocore.exceptions import ClientError, MissingParametersError, ParamValidationError
+    HAS_BOTO3 = True
+except ImportError:
+    HAS_BOTO3 = False
+
+
 DOCUMENTATION = '''
 ---
 module: api_gw
@@ -134,15 +147,6 @@ API_CONFIG = dict(
     )
 )
 
-import datetime
-
-try:
-    import boto3
-    from botocore.exceptions import ClientError
-    HAS_BOTO3 = True
-except ImportError:
-    HAS_BOTO3 = False
-
 
 # ----------------------------------
 #          Helper functions
@@ -185,7 +189,7 @@ def get_api_params(module):
     api_params = dict()
 
     for key in params.keys():
-        value = params(key)
+        value = params[key]
         if value:
             api_params[cc(key)] = value
 
@@ -219,7 +223,7 @@ def fix_return(node):
 #   Resource management function
 # ----------------------------------
 
-def invoke_api(client, module):
+def invoke_api(client, module, api_spec):
     """
     Needs a little more work....
 
@@ -227,65 +231,67 @@ def invoke_api(client, module):
     :param module:
     :return:
     """
-    resource_type = module.params['resource_type']
+    # resource_type = module.params['resource_type']
     results = dict()
     changed = False
     current_state = None
+    #
+    # state = module.params.get('state')
+    #
+    # api_method = getattr(client, 'get_{}'.format(resource_type))
+    # if not api_method:
+    #     module.fail_json(msg="Programming error: resource {} has no get method.".format(resource_type))
+    #
+    # api_params = get_api_params(module)
+    #
+    # # try:
+    # #     results = api_method(**api_params)
+    # #     current_state = 'present'
+    # # except ClientError, e:
+    # #     if e.response['Error']['Code'] == 'NotFoundException':           #       'ResourceNotFoundException':
+    # #         current_state = 'absent'
+    # #     else:
+    # #         module.fail_json(msg='Error gathering facts for type {0}: {1}'.format(resource_type, e))
+    #
+    # if state == current_state:
+    #     # nothing to do but exit
+    #     changed = False
+    # else:
+    #     if state == 'absent':
+    #         method_params = API_CONFIG[resource_type]['delete']
+    #         api_method = getattr(client, '{}_{}'.format(method_params['method'], resource_type))
+    #
+    #         try:
+    #             if not module.check_mode:
+    #                 results = api_method(**api_params)
+    #             changed = True
+    #         except ClientError, e:
+    #             module.fail_json(msg='Error deleting type {0}: {1}'.format(resource_type, e))
+    #
+    #     elif state == 'present':
+    #         method_params = API_CONFIG[resource_type]['create']
+    #         api_method = getattr(client, '{}_{}'.format(method_params['method'], resource_type))
+    #
+    #         try:
+    #             if not module.check_mode:
+    #                 results = api_method(**api_params)
+    #             changed = True
+    #         except ClientError, e:
+    #             module.fail_json(msg='Error creating type {0}: {1}'.format(resource_type, e))
+    #     else:
+    #         method_params = API_CONFIG[resource_type]['update']
+    #         api_method = getattr(client, '{}_{}'.format(method_params['method'], resource_type))
+    #
+    #         try:
+    #             if not module.check_mode:
+    #                 results = api_method(**api_params)
+    #             changed = True
+    #         except ClientError, e:
+    #             module.fail_json(msg='Error updating type {0}: {1}'.format(resource_type, e))
 
-    state = module.params.get('state')
+    results = api_spec
 
-    api_method = getattr(client, 'get_{}'.format(resource_type))
-    if not api_method:
-        module.fail_json(msg="Programming error: resource {} has no get method.".format(resource_type))
-
-    api_params = get_api_params(module)
-
-    try:
-        results = api_method(**api_params)
-        current_state = 'present'
-    except ClientError, e:
-        if e.response['Error']['Code'] == 'NotFoundException':           #       'ResourceNotFoundException':
-            current_state = 'absent'
-        else:
-            module.fail_json(msg='Error gathering facts for type {0}: {1}'.format(resource_type, e))
-
-    if state == current_state:
-        # nothing to do but exit
-        changed = False
-    else:
-        if state == 'absent':
-            method_params = API_CONFIG[resource_type]['delete']
-            api_method = getattr(client, '{}_{}'.format(method_params['method'], resource_type))
-
-            try:
-                if not module.check_mode:
-                    results = api_method(**api_params)
-                changed = True
-            except ClientError, e:
-                module.fail_json(msg='Error deleting type {0}: {1}'.format(resource_type, e))
-
-        elif state == 'present':
-            method_params = API_CONFIG[resource_type]['create']
-            api_method = getattr(client, '{}_{}'.format(method_params['method'], resource_type))
-
-            try:
-                if not module.check_mode:
-                    results = api_method(**api_params)
-                changed = True
-            except ClientError, e:
-                module.fail_json(msg='Error creating type {0}: {1}'.format(resource_type, e))
-        else:
-            method_params = API_CONFIG[resource_type]['update']
-            api_method = getattr(client, '{}_{}'.format(method_params['method'], resource_type))
-
-            try:
-                if not module.check_mode:
-                    results = api_method(**api_params)
-                changed = True
-            except ClientError, e:
-                module.fail_json(msg='Error updating type {0}: {1}'.format(resource_type, e))
-
-    return dict(changed=changed, results=fix_return(results))
+    return dict(changed=changed, results=dict(api_gw_facts=fix_return(results)))
 
 
 # ----------------------------------
@@ -302,9 +308,10 @@ def main():
 
     argument_spec = ec2_argument_spec()
     argument_spec.update(dict(
-        state=dict(default='present', required=False, choices=['present', 'absent', 'updated']),
-        resource_type=dict(required=False, choices=API_CONFIG.keys(), default='account'),
-        resource_parameters=dict(required=True, default=None)
+        state=dict(default='present', required=False, choices=['present', 'absent']),
+        rest_api=dict(required=True,  default=None, aliases=['name']),
+        swagger_spec=dict(required=True, default=None, aliases=['oai_spec']),
+        deploy=dict(required=False, default=False)
         )
     )
 
@@ -332,7 +339,19 @@ def main():
     except Exception, e:
         module.fail_json(msg="Connection Error - {0}".format(e))
 
-    response = invoke_api(client, module)
+    # read the swagger/oai spec file
+    spec_file = module.params['swagger_spec']
+    try:
+        with open(spec_file, 'r') as spec_data:
+            if spec_file.endswith(('.yml', '.yaml')):
+                swagger_spec = yaml.load(spec_data)
+            else:
+                swagger_spec = json.load(spec_data)
+
+    except Exception as e:
+        module.fail_json(msg='Invalid or missing API specification: {0}'.format(e))
+
+    response = invoke_api(client, module, swagger_spec)
 
     results = dict(ansible_facts=response['results'], changed=response['changed'])
 

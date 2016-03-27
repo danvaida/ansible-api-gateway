@@ -112,6 +112,7 @@ import datetime
 
 try:
     import boto3
+    import boto
     from botocore.exceptions import ClientError
     HAS_BOTO3 = True
 except ImportError:

@@ -1,0 +1,19 @@
+---
+- hosts: localhost
+  gather_facts: no
+  vars:
+    state: present
+    api_gw_spec_file: /path/to/swagger/spec/LambdaMicroservice-Dev.yaml
+    account: 123456789012
+
+  tasks:
+  - name: AWS API Gateway
+    api_gw:
+      state: "{{ state | default('present') }}"
+      name: apiGateway
+#      deploy_api: True
+      swagger_spec: "{{ api_gw_spec_file }}"
+
+  - name: show results
+    debug: var=api_gw_facts
+
