@@ -254,9 +254,37 @@ def invoke_api(client, module, swagger_spec):
     results = dict()
     changed = False
     current_state = None
-    #
-    # state = module.params.get('state')
-    #
+
+    state = module.params.get('state')
+
+    try:
+        info_title = swagger_spec['info']['title']
+    except Exception as e:
+        module.fail_json(msg="Missing required value: {0}".format(e))
+
+    # check if REST API ID is specified and valid
+    rest_api_id = module.params['rest_api_id']
+    if rest_api_id == '*':
+        try:
+            rest_apis = client.get_rest_apis(limit=500)['items']
+            choices = [api for api in rest_apis if api['name'] == info_title]
+        except ClientError as e:
+            module.fail_json(msg="Error retrieving REST APIs: {0}".format(e))
+
+        if len(choices) > 1:
+            module.fail_json(msg="More than one API found: {0}".format(choices))
+        else:
+            rest_api_id = choices[0]['id']
+
+    try:
+        rest_api = client.get_rest_api(restApiId=rest_api_id)
+        current_state = 'present'
+    except (ClientError, ParamValidationError, MissingParametersError) as e:
+        if e.response['Error']['Code'] == 'NotFoundException':
+            current_state = 'absent'
+        else:
+            module.fail_json(msg='Error retrieving REST API: {0}'.format(e))
+
     # api_method = getattr(client, 'get_{}'.format(resource_type))
     # if not api_method:
     #     module.fail_json(msg="Programming error: resource {} has no get method.".format(resource_type))
@@ -333,7 +361,7 @@ def invoke_api(client, module, swagger_spec):
         #         check_list.append("element '{0}' absent - OK".format(key))
 
 
-    return dict(changed=changed, results=dict(api_gw_facts=fix_return(check_list)))
+    return dict(changed=changed, results=dict(api_gw_facts=dict(current_state=current_state, swagger=fix_return(check_list))))
 
 
 def check_node(key_name, node, level):
@@ -342,14 +370,14 @@ def check_node(key_name, node, level):
     level += 1
 
     if isinstance(node, dict):
-        check_list.append("{0}{1}:{2}".format(' '*level*2,  key_name, ' '*80))
+        tlen = 101 - len(str(key_name)) - level*2
+        check_list.append("{0}{1}:{2}".format(' '*level*2,  key_name, ' '*tlen))
 
         for key in node.keys():
-            # check_list.append("{0}{1}:{2}".format(' '*prefix,  key, ' '*(50-prefix)))
-
             check_list.extend(check_node(key, node[key], level))
     else:
-        check_list.append("{0}{1}: {2}{3}".format(' '*level*2,  key_name, node, ' '*80))
+        tlen = 100 - len(str(key_name)) - len(str(node)) - level*2
+        check_list.append("{0}{1}: {2}{3}".format(' '*level*2,  key_name, node, ' '*tlen))
 
     return check_list
 
@@ -369,7 +397,7 @@ def main():
     argument_spec = ec2_argument_spec()
     argument_spec.update(dict(
         state=dict(default='present', required=False, choices=['present', 'absent']),
-        rest_api=dict(required=True,  default=None, aliases=['name']),
+        rest_api_id=dict(required=True,  default=None, aliases=['api_id']),
         swagger_spec=dict(required=True, default=None, aliases=['oai_spec']),
         deploy=dict(required=False, default=False)
         )
@@ -410,6 +438,7 @@ def main():
 
     except Exception as e:
         module.fail_json(msg='Invalid or missing API specification: {0}'.format(e))
+
 
     response = invoke_api(client, module, swagger_spec)
 
