@@ -26,6 +26,13 @@ try:
 except ImportError:
     HAS_BOTO3 = False
 
+try:
+    from swagger_spec_validator import validate_spec_url
+    from swagger_spec_validator.common import SwaggerValidationError
+    HAS_SWAGGER_VALIDATOR = True
+except ImportError:
+    HAS_SWAGGER_VALIDATOR = False
+
 
 DOCUMENTATION = '''
 ---
@@ -167,6 +174,7 @@ SWAGGER_OBJ = dict(
 
 )
 
+
 # ----------------------------------
 #          Helper functions
 # ----------------------------------
@@ -259,8 +267,9 @@ def invoke_api(client, module, swagger_spec):
 
     try:
         info_title = swagger_spec['info']['title']
-    except Exception as e:
-        module.fail_json(msg="Missing required value: {0}".format(e))
+    except KeyError as e:
+        info_title = None
+        module.fail_json(msg="Missing required value in swagger spec: info.title")
 
     # check if REST API ID is specified and valid
     rest_api_id = module.params['rest_api_id']
@@ -269,6 +278,7 @@ def invoke_api(client, module, swagger_spec):
             rest_apis = client.get_rest_apis(limit=500)['items']
             choices = [api for api in rest_apis if api['name'] == info_title]
         except ClientError as e:
+            choices = None
             module.fail_json(msg="Error retrieving REST APIs: {0}".format(e))
 
         if len(choices) > 1:
@@ -341,24 +351,18 @@ def invoke_api(client, module, swagger_spec):
 
     check_list = check_node('swagger', swagger_spec, 0)
 
+    for key in SWAGGER_SPEC.keys():
+        if swagger_spec.get(key):
+            this_module = sys.modules[__name__]
+            try:
+                this_module_function = getattr(this_module, 'process_{}'.format(key))
+                results = this_module_function(module, client, swagger_spec[key])
+            except AttributeError:
+                pass
 
-    # for key in SWAGGER_SPEC.keys():
-    #     if swagger_spec.get(key):
-    #         check_list.append(check_node(swagger_spec[key], 1))
-            # check_list.append("element '{0}' present - OK".format(key))
-            # if isinstance(swagger_spec[key], dict):
-            #     for sub_key in swagger_spec[key].keys():
-            #         check_list.append("    sub-element '{0}' found - OK".format(sub_key))
-            #
-            #         if isinstance(swagger_spec[key][sub_key], dict):
-            #             for sub_sub_key in swagger_spec[key][sub_key].keys():
-            #                 check_list.append("        sub-sub-element '{0}' found - OK".format(sub_sub_key))
 
-        # else:
-        #     if SWAGGER_SPEC[key].get('required'):
-        #         check_list.append("element '{0}' absent but required - Error".format(key))
-        #     else:
-        #         check_list.append("element '{0}' absent - OK".format(key))
+        elif SWAGGER_SPEC[key].get('required'):
+            module.fail_json(msg="Element '{0}' absent but required - Error".format(key))
 
 
     return dict(changed=changed, results=dict(api_gw_facts=dict(current_state=current_state, swagger=fix_return(check_list))))
@@ -380,6 +384,36 @@ def check_node(key_name, node, level):
         check_list.append("{0}{1}: {2}{3}".format(' '*level*2,  key_name, node, ' '*tlen))
 
     return check_list
+
+
+def process_swagger(module, client, version):
+
+    if not version == '2.0':
+        module.fail_json(msg="Invalid Swagger specification version: '{0}' ".format(version))
+
+    return version
+
+
+def process_info(module, client, info_obj):
+
+    if 'description' in info_obj:
+        description = info_obj['description']
+    else:
+        description = 'No description provided.'
+
+    return description
+
+# def process_paths(module, client, paths_obj):
+#
+#     try:
+#         resources = client.get_resources(limit=500, restApiId=)['items']
+#         current_paths = [api for api in resources if api['name']]
+#     except ClientError as e:
+#         current_paths = None
+#         module.fail_json(msg="Error retrieving REST APIs: {0}".format(e))
+#
+#
+#     for path in paths_obj.keys():
 
 
 # ----------------------------------
@@ -427,8 +461,21 @@ def main():
     except Exception, e:
         module.fail_json(msg="Connection Error - {0}".format(e))
 
-    # read the swagger/oai spec file
     spec_file = module.params['swagger_spec']
+
+    if HAS_SWAGGER_VALIDATOR:
+        if spec_file.endswith(('.json', '.jsn')):
+            try:
+                validate_spec_url('file://{}'.format(spec_file))
+            except SwaggerValidationError as e:
+
+                msg = e.message.split('\n', 1)[0]
+                module.fail_json(msg='Error validating Swagger specification: {0}'.format(msg))
+        else:
+            #TODO: could convert YAML to JSON in tmp folder
+            pass
+
+    # read the swagger/oai spec file as it's assumed to be valid
     try:
         with open(spec_file, 'r') as spec_data:
             if spec_file.endswith(('.yml', '.yaml')):
