@@ -1,4 +1,5 @@
 boto3>=1.2
 botocore>=1.3
 ansible
+swagger_spec_validator
 importlib

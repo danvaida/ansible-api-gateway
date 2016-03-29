@@ -8,6 +8,7 @@ formerly known as "The Swagger Specification" along with AWS integration extensi
 ## Requirements
 - ansible
 - boto3
+- swagger_spec_validator (optional but recommended for validation)
 - importlib (only for running tests on < python 2.7)
 
 ## Modules
