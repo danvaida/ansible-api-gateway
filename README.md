@@ -1,6 +1,7 @@
 # Ansible Cloud Modules for AWS API Gateway with OpenAPI/ Swagger Specification
 
-### v0.1.0 [![Build Status](https://travis-ci.org/pjodouin/ansible-api-gateway.svg)](https://travis-ci.org/pjodouin/ansible-api-gateway)
+### v0.0.0a [![Build Status](https://travis-ci.org/pjodouin/ansible-api-gateway.svg)](https://travis-ci.org/pjodouin/ansible-api-gateway)
+*Unstable work in Progress*
 
 The module will use the [Open API Initiative (OAI)](http://swagger.io/specification/) specification,
 formerly known as "The Swagger Specification" along with AWS integration extensions to define the APIs.
