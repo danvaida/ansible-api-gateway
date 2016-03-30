@@ -1,8 +1,8 @@
-# Ansible Cloud Modules for AWS API Gateway -- OAI/Swagger
+# Ansible Cloud Modules for AWS API Gateway with OpenAPI/ Swagger Specification
 
 ### v0.1.0 [![Build Status](https://travis-ci.org/pjodouin/ansible-api-gateway.svg)](https://travis-ci.org/pjodouin/ansible-api-gateway)
 
-Just starting on this.  The module will use the [Open API Initiative (OAI)](http://swagger.io/specification/) specification,
+The module will use the [Open API Initiative (OAI)](http://swagger.io/specification/) specification,
 formerly known as "The Swagger Specification" along with AWS integration extensions to define the APIs.
 
 ## Requirements
@@ -23,4 +23,25 @@ ____
 ### api_gw:
 Manages AWS API Gateway resources
 
-##### Example Command
+##### Example Playbook
+
+```yaml
+---
+- hosts: localhost
+  gather_facts: no
+  vars:
+    state: present
+    api_gw_spec_file: /path/to/swagger/spec/LambdaMicroservice-Dev.yaml
+
+  tasks:
+  - name: AWS API Gateway
+    api_gw:
+      state: "{{ state | default('present') }}"
+      api_id: '*'
+#      deploy_api: True
+      swagger_spec: "{{ api_gw_spec_file }}"
+
+  - name: show results
+    debug: var=api_gw_facts
+
+```
