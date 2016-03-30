@@ -157,23 +157,23 @@ API_CONFIG = dict(
 SWAGGER_SPEC = dict(
     swagger=dict(required=True),
     info=dict(required=True),
-    basePath=dict(required=False),
-    paths=dict(required=True, type='dict', obj='path'),
-    schemes=dict(required=False),
     definitions=dict(required=False),
-    securityDefinitions=dict(required=False),
-    host=dict(required=False),
-    parameters=dict(required=False),
+    basePath=dict(required=False),
     responses=dict(required=False),
     consumes=dict(required=False),
     produces=dict(required=False),
+    paths=dict(required=True, type='dict', obj='path'),
+    schemes=dict(required=False),
+    securityDefinitions=dict(required=False),
+    host=dict(required=False),
+    parameters=dict(required=False),
  )
 
 SWAGGER_OBJ = dict(
     path=dict(type='dict', )
 
 )
-
+rest_api_id = None
 
 # ----------------------------------
 #          Helper functions
@@ -357,6 +357,7 @@ def invoke_api(client, module, swagger_spec):
             try:
                 this_module_function = getattr(this_module, 'process_{}'.format(key))
                 results = this_module_function(module, client, swagger_spec[key])
+                check_list.append(results)
             except AttributeError:
                 pass
 
@@ -386,6 +387,7 @@ def check_node(key_name, node, level):
     return check_list
 
 
+
 def process_swagger(module, client, version):
 
     if not version == '2.0':
@@ -403,17 +405,17 @@ def process_info(module, client, info_obj):
 
     return description
 
-# def process_paths(module, client, paths_obj):
-#
-#     try:
-#         resources = client.get_resources(limit=500, restApiId=)['items']
-#         current_paths = [api for api in resources if api['name']]
-#     except ClientError as e:
-#         current_paths = None
-#         module.fail_json(msg="Error retrieving REST APIs: {0}".format(e))
-#
-#
-#     for path in paths_obj.keys():
+def process_paths(module, client, paths_obj):
+
+    try:
+        resources = client.get_resources(limit=500, restApiId='7vnky1q6oi')['items']
+        current_paths = [resource for resource in resources]
+    except ClientError as e:
+        current_paths = None
+        module.fail_json(msg="Error retrieving resources: {0}".format(e))
+
+
+    return current_paths
 
 
 # ----------------------------------
