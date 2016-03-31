@@ -27,7 +27,6 @@ Manages AWS API Gateway resources
 ##### Example Playbook
 
 ```yaml
----
 - hosts: localhost
   gather_facts: no
   vars:
