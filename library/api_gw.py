@@ -175,6 +175,22 @@ SWAGGER_OBJ = dict(
 )
 rest_api_id = None
 
+
+class ResourceNode:
+
+    def __init__(self, path):
+
+        self.path = path
+        self.node_name = path.split('/')[-1]
+
+        self.id = None
+        self.parent_id = None
+
+        self.methods = dict()
+
+
+
+
 # ----------------------------------
 #          Helper functions
 # ----------------------------------
@@ -361,7 +377,6 @@ def invoke_api(client, module, swagger_spec):
             except AttributeError:
                 pass
 
-
         elif SWAGGER_SPEC[key].get('required'):
             module.fail_json(msg="Element '{0}' absent but required - Error".format(key))
 
@@ -387,7 +402,6 @@ def check_node(key_name, node, level):
     return check_list
 
 
-
 def process_swagger(module, client, version):
 
     if not version == '2.0':
@@ -404,6 +418,7 @@ def process_info(module, client, info_obj):
         description = 'No description provided.'
 
     return description
+
 
 def process_paths(module, client, paths_obj):
 
