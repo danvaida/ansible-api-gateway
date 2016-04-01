@@ -42,7 +42,7 @@ module: api_gw
 short_description: Creates, updates or deletes AWS API Gateway resources.
 description:
     - This module allows the management of AWS API Gateway resources via the Ansible framework.
-version_added: "2.0"
+version_added: "2.1"
 author: Pierre Jodouin (@pjodouin)
 options:
 
@@ -160,13 +160,13 @@ SWAGGER_SPEC = dict(
     swagger=dict(required=True),
     info=dict(required=True),
     definitions=dict(required=False),
-    basePath=dict(required=False),
+    base_path=dict(required=False),
     responses=dict(required=False),
     consumes=dict(required=False),
     produces=dict(required=False),
     paths=dict(required=True, type='dict', obj='path'),
     schemes=dict(required=False),
-    securityDefinitions=dict(required=False),
+    security_definitions=dict(required=False),
     host=dict(required=False),
     parameters=dict(required=False),
  )
@@ -175,7 +175,6 @@ SWAGGER_OBJ = dict(
     path=dict(type='dict', )
 
 )
-rest_api_id = None
 
 
 # ----------------------------------------------------
@@ -307,17 +306,17 @@ def invoke_api(client, module, swagger_spec):
     # resource_type = module.params['resource_type']
     results = dict()
     changed = False
-    current_state = None
+    current_state = 'absent'
 
     state = module.params.get('state')
 
     try:
         info_title = swagger_spec['info']['title']
-    except KeyError as e:
+    except KeyError:
         info_title = None
         module.fail_json(msg="Missing required value in swagger spec: info.title")
 
-    # check if REST API ID is specified and valid
+    # check if REST API ID is specified, exists and is valid
     rest_api_id = module.params['rest_api_id']
     if rest_api_id == '*':
         try:
@@ -329,107 +328,107 @@ def invoke_api(client, module, swagger_spec):
 
         if len(choices) > 1:
             module.fail_json(msg="More than one API found: {0}".format(choices))
-        else:
-            rest_api_id = choices[0]['id']
+        elif len(choices) > 0:
+            try:
+                rest_api_id = choices[0]['id']
+                rest_api = client.get_rest_api(restApiId=rest_api_id)
+                current_state = 'present'
+            except (ClientError, ParamValidationError, MissingParametersError) as e:
+                if not e.response['Error']['Code'] == 'NotFoundException':
+                    module.fail_json(msg='Error retrieving REST API: {0}'.format(e))
 
-    try:
-        rest_api = client.get_rest_api(restApiId=rest_api_id)
-        current_state = 'present'
-    except (ClientError, ParamValidationError, MissingParametersError) as e:
-        if e.response['Error']['Code'] == 'NotFoundException':
-            current_state = 'absent'
-        else:
-            module.fail_json(msg='Error retrieving REST API: {0}'.format(e))
-
-    # api_method = getattr(client, 'get_{}'.format(resource_type))
-    # if not api_method:
-    #     module.fail_json(msg="Programming error: resource {} has no get method.".format(resource_type))
-    #
-    # api_params = get_api_params(module)
-    #
-    # # try:
-    # #     results = api_method(**api_params)
-    # #     current_state = 'present'
-    # # except ClientError, e:
-    # #     if e.response['Error']['Code'] == 'NotFoundException':           #       'ResourceNotFoundException':
-    # #         current_state = 'absent'
-    # #     else:
-    # #         module.fail_json(msg='Error gathering facts for type {0}: {1}'.format(resource_type, e))
-    #
-    # if state == current_state:
-    #     # nothing to do but exit
-    #     changed = False
-    # else:
-    #     if state == 'absent':
-    #         method_params = API_CONFIG[resource_type]['delete']
-    #         api_method = getattr(client, '{}_{}'.format(method_params['method'], resource_type))
-    #
-    #         try:
-    #             if not module.check_mode:
-    #                 results = api_method(**api_params)
-    #             changed = True
-    #         except ClientError, e:
-    #             module.fail_json(msg='Error deleting type {0}: {1}'.format(resource_type, e))
-    #
-    #     elif state == 'present':
-    #         method_params = API_CONFIG[resource_type]['create']
-    #         api_method = getattr(client, '{}_{}'.format(method_params['method'], resource_type))
-    #
-    #         try:
-    #             if not module.check_mode:
-    #                 results = api_method(**api_params)
-    #             changed = True
-    #         except ClientError, e:
-    #             module.fail_json(msg='Error creating type {0}: {1}'.format(resource_type, e))
-    #     else:
-    #         method_params = API_CONFIG[resource_type]['update']
-    #         api_method = getattr(client, '{}_{}'.format(method_params['method'], resource_type))
-    #
-    #         try:
-    #             if not module.check_mode:
-    #                 results = api_method(**api_params)
-    #             changed = True
-    #         except ClientError, e:
-    #             module.fail_json(msg='Error updating type {0}: {1}'.format(resource_type, e))
-
+    # check for obvious type error: must be a dictionary
     if not isinstance(swagger_spec, dict):
         module.fail_json(msg='Invalid Swagger specification: {0}'.format(swagger_spec))
 
-    check_list = check_node('swagger', swagger_spec, 0)
+    # process each high-level swagger spec node type
+    facts = dict()
 
     for key in SWAGGER_SPEC.keys():
-        if swagger_spec.get(key):
+        if swagger_spec.get(cc(key)):
             this_module = sys.modules[__name__]
             try:
                 this_module_function = getattr(this_module, 'process_{}'.format(key))
-                results = this_module_function(module, client, swagger_spec[key])
-                check_list.append(results)
+                results = this_module_function(module, client, swagger_spec[cc(key)])
+                facts.update(results)
             except AttributeError:
                 pass
 
         elif SWAGGER_SPEC[key].get('required'):
             module.fail_json(msg="Element '{0}' absent but required - Error".format(key))
 
+    if state == 'present':
+        if current_state == 'present':
 
-    return dict(changed=changed, results=dict(api_gw_facts=dict(current_state=current_state, swagger=fix_return(check_list))))
+            # nothing to do but exit
+            facts.update(action='nothing', rest_api=rest_api)
+            changed = False
+        else:
+            # create API
 
+            try:
+                rest_api = client.create_rest_api(
+                    name=facts['info']['title'],
+                    description=facts['info']['description']
+                )
+                facts.update(action='created', rest_api=rest_api)
+                rest_api_id = rest_api['id']
+                changed = True
 
-def check_node(key_name, node, level):
+            except (ClientError, ParamValidationError, MissingParametersError) as e:
+                module.fail_json(msg='Error creating REST API: {0}'.format(e))
 
-    check_list = []
-    level += 1
+            # create models
+            try:
+                for model in facts['models'].keys():
+                    schema = facts['models'][model]
+                    schema.update({
+                        "$schema": "http://json-schema.org/draft-04/schema#",
+                        "type": "object",
+                        "title": "{0} schema".format(model)
+                    })
+                    results = client.create_model(
+                        restApiId=rest_api_id,
+                        name=model,
+                        description='added by Ansible module',
+                        contentType='application/json',
+                        schema=json.dumps(schema)
+                    )
 
-    if isinstance(node, dict):
-        tlen = 101 - len(str(key_name)) - level*2
-        check_list.append("{0}{1}:{2}".format(' '*level*2,  key_name, ' '*tlen))
+            except (ClientError, ParamValidationError, MissingParametersError) as e:
+                module.fail_json(msg='Error creating API model: {0}'.format(e))
 
-        for key in node.keys():
-            check_list.extend(check_node(key, node[key], level))
+            # create resources/paths
+
     else:
-        tlen = 100 - len(str(key_name)) - len(str(node)) - level*2
-        check_list.append("{0}{1}: {2}{3}".format(' '*level*2,  key_name, node, ' '*tlen))
+        if current_state == 'present':
+            try:
+                rest_api = client.delete_rest_api(restApiId=rest_api_id)
+                facts.update(action='deleted')
+                changed = True
 
-    return check_list
+            except (ClientError, ParamValidationError, MissingParametersError) as e:
+                module.fail_json(msg='Error deleting REST API: {0}'.format(e))
+
+    return dict(changed=changed, results=dict(api_gw_facts=dict(current_state=current_state, swagger=fix_return(facts))))
+
+
+# def check_node(key_name, node, level):
+#
+#     check_list = []
+#     level += 1
+#
+#     if isinstance(node, dict):
+#         tlen = 101 - len(str(key_name)) - level*2
+#         check_list.append("{0}{1}:{2}".format(' '*level*2,  key_name, ' '*tlen))
+#
+#         for key in node.keys():
+#             check_list.extend(check_node(key, node[key], level))
+#     else:
+#         tlen = 100 - len(str(key_name)) - len(str(node)) - level*2
+#         check_list.append("{0}{1}: {2}{3}".format(' '*level*2,  key_name, node, ' '*tlen))
+#
+#     return check_list
 
 
 def process_swagger(module, client, version):
@@ -437,7 +436,7 @@ def process_swagger(module, client, version):
     if not version == '2.0':
         module.fail_json(msg="Invalid Swagger specification version: '{0}' ".format(version))
 
-    return version
+    return dict(version=version)
 
 
 def process_info(module, client, info_obj):
@@ -445,9 +444,11 @@ def process_info(module, client, info_obj):
     if 'description' in info_obj:
         description = info_obj['description']
     else:
-        description = 'No description provided.'
+        description = 'Created by Ansible API Gateway module.'
 
-    return description
+    title = info_obj['title']
+
+    return dict(info=dict(description=description, title=title))
 
 
 def process_paths(module, client, paths_obj):
@@ -459,8 +460,37 @@ def process_paths(module, client, paths_obj):
 
         add(resource_tree, path, node)
 
-    return resource_tree
+    return dict(resources=resource_tree)
 
+
+def process_definitions(module, client, definitions):
+
+    models = dict()
+
+    for ref in definitions:
+        models[ref] = definitions[ref]
+
+    return dict(models=models)
+
+
+def process_security_definitions(module, client, definitions):
+
+    security_definitions = dict()
+
+    for ref in definitions:
+        security_definitions[ref] = definitions[ref]
+
+    return dict(securityDefinitions=security_definitions)
+
+
+def process_base_path(module, client, path):
+
+    base_path = None
+
+    if path:
+        base_path = path
+
+    return dict(basePath=base_path)
 
 # ----------------------------------
 #           Main function
