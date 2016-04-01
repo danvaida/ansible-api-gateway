@@ -18,6 +18,8 @@ import datetime
 import yaml
 import json
 
+from collections import defaultdict
+
 try:
     import boto3
     import boto
@@ -176,24 +178,52 @@ SWAGGER_OBJ = dict(
 rest_api_id = None
 
 
-class ResourceNode:
+# ----------------------------------------------------
+#   hacks to implement a python tree-like structure
+# ----------------------------------------------------
 
-    def __init__(self, path):
+def py_tree():
+    """
+    Create a python tree structure with magic.
 
-        self.path = path
-        self.node_name = path.split('/')[-1]
-
-        self.id = None
-        self.parent_id = None
-
-        self.methods = dict()
-
-
+    :return: tree obj
+    """
+    return defaultdict(py_tree)
 
 
-# ----------------------------------
+def tree_to_dicts(tree):
+    """
+    Converts tree nodes to proper python dictionaries.
+
+    :param tree:
+    :return: dict
+    """
+    try:
+        return dict((key, tree_to_dicts(tree[key])) for key in tree)
+    except TypeError:
+        return tree
+
+
+def add(tree, resource_path, node_content):
+    """
+    Builds tree nodes based on resource paths. Content is appended as leaf nodes.
+
+    :param tree:
+    :param resource_path:
+    :param node_content:
+    """
+    nodes = resource_path.split('/')
+    for node in nodes:
+        tree = tree[node]
+
+    # _ = dict(path=resource_path, id='', parent_id='', parth_part=nodes[-1], resource_methods=value)
+
+    tree.update(_=node_content)
+
+
+# ----------------------------------------------------
 #          Helper functions
-# ----------------------------------
+# ----------------------------------------------------
 
 def pc(key):
     """
@@ -422,15 +452,14 @@ def process_info(module, client, info_obj):
 
 def process_paths(module, client, paths_obj):
 
-    try:
-        resources = client.get_resources(limit=500, restApiId='7vnky1q6oi')['items']
-        current_paths = [resource for resource in resources]
-    except ClientError as e:
-        current_paths = None
-        module.fail_json(msg="Error retrieving resources: {0}".format(e))
+    resource_tree = py_tree()
 
+    for path in paths_obj.keys():
+        node = dict(path=path, resource_methods=paths_obj[path])
 
-    return current_paths
+        add(resource_tree, path, node)
+
+    return resource_tree
 
 
 # ----------------------------------
