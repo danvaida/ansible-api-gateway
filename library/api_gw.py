@@ -399,6 +399,8 @@ def invoke_api(client, module, swagger_spec):
                 module.fail_json(msg='Error creating API model: {0}'.format(e))
 
             # create resources/paths
+            nodes = facts['resources']['']
+            results = crawl_tree(client, module, nodes, dict(rest_api_id=rest_api_id))
 
     else:
         if current_state == 'present':
@@ -411,6 +413,19 @@ def invoke_api(client, module, swagger_spec):
                 module.fail_json(msg='Error deleting REST API: {0}'.format(e))
 
     return dict(changed=changed, results=dict(api_gw_facts=dict(current_state=current_state, swagger=fix_return(facts))))
+
+
+def crawl_tree(client, module, nodes, context):
+
+    if '_' in nodes:
+        _node = nodes.pop('_')
+        rest_api_id = context['rest_api_id']
+
+
+    for node in nodes:
+        results = crawl_tree(client, module, node, context)
+
+    return nodes
 
 
 # def check_node(key_name, node, level):
