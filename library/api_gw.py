@@ -177,6 +177,41 @@ SWAGGER_OBJ = dict(
 )
 
 
+class TreeNode:
+
+    def __init__(self, path, methods=None, resource_id=None, parent_id=None):
+
+        self.path = path
+        self.path_part = path.split('/')[-1]
+        self.resource_id = resource_id
+        self.parent_id = parent_id
+
+        if methods:
+            self.methods = methods
+        else:
+            self.methods = {}
+
+        self.child_nodes = {}
+
+    def add_path(self, full_path, index=0, methods=None):
+
+        nodes = full_path.split('/')
+
+        path = '/'.join(nodes[0:index])
+        path_part = nodes[index]
+
+        if path_part not in self.child_nodes:
+            self.child_nodes[path_part] = TreeNode(path)
+
+        index += 1
+        if index >= len(nodes):
+            return
+
+        if len(nodes) > 1:
+            self.child_nodes[path_part].add_path(full_path, index, methods)
+        else:
+            self.child_nodes[path_part].methods = methods
+
 # ----------------------------------------------------
 #   hacks to implement a python tree-like structure
 # ----------------------------------------------------
@@ -211,11 +246,9 @@ def add(tree, resource_path, node_content):
     :param resource_path:
     :param node_content:
     """
-    nodes = resource_path.split('/')
+    nodes = resource_path.split('/')[1:]
     for node in nodes:
         tree = tree[node]
-
-    # _ = dict(path=resource_path, id='', parent_id='', parth_part=nodes[-1], resource_methods=value)
 
     tree.update(_=node_content)
 
@@ -399,7 +432,7 @@ def invoke_api(client, module, swagger_spec):
                 module.fail_json(msg='Error creating API model: {0}'.format(e))
 
             # create resources/paths
-            nodes = facts['resources']['']
+            nodes = facts['resources']
             results = crawl_tree(client, module, nodes, dict(rest_api_id=rest_api_id))
 
     else:
@@ -417,9 +450,13 @@ def invoke_api(client, module, swagger_spec):
 
 def crawl_tree(client, module, nodes, context):
 
-    if '_' in nodes:
-        _node = nodes.pop('_')
-        rest_api_id = context['rest_api_id']
+    rest_api_id = context['rest_api_id']
+
+    # if '_' in nodes:
+    #     _node = nodes.pop('_')
+    # else:
+    #     _node =dict(path=)
+    #
 
 
     for node in nodes:
@@ -471,7 +508,7 @@ def process_paths(module, client, paths_obj):
     resource_tree = py_tree()
 
     for path in paths_obj.keys():
-        node = dict(path=path, resource_methods=paths_obj[path])
+        node = dict(path=path, ) #resource_methods=paths_obj[path])
 
         add(resource_tree, path, node)
 
