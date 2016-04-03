@@ -178,10 +178,12 @@ SWAGGER_OBJ = dict(
 
 
 class TreeNode:
-
+    """
+    Represents a node in a tree-like structure of API Gateway resources.
+    """
     def __init__(self, path, methods=None, resource_id=None, parent_id=None):
 
-        self.path = path
+        self.path = '/{0}'.format(path)
         self.path_part = path.split('/')[-1]
         self.resource_id = resource_id
         self.parent_id = parent_id
@@ -194,20 +196,26 @@ class TreeNode:
         self.child_nodes = {}
 
     def add_path(self, full_path, index=0, methods=None):
+        """
+        Given the full path to a resource, add resource nodes as required until last one reached, at which point
+        methods can be assigned.  The 'path' attribute becomes the hash key of the resource list.
+
+        :param full_path:
+        :param index:
+        :param methods:
+        :return:
+        """
 
         nodes = full_path.split('/')
 
-        path = '/'.join(nodes[0:index])
+        path = '/'.join(nodes[0:index+1])
         path_part = nodes[index]
 
         if path_part not in self.child_nodes:
             self.child_nodes[path_part] = TreeNode(path)
 
         index += 1
-        if index >= len(nodes):
-            return
-
-        if len(nodes) > 1:
+        if index < len(nodes):
             self.child_nodes[path_part].add_path(full_path, index, methods)
         else:
             self.child_nodes[path_part].methods = methods
