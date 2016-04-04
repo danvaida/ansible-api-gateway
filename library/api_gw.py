@@ -319,13 +319,10 @@ def fix_return(node):
 
     if isinstance(node, datetime.datetime):
         node_value = str(node)
-
     elif isinstance(node, list):
         node_value = [fix_return(item) for item in node]
-
     elif isinstance(node, dict):
         node_value = dict([(item, fix_return(node[item])) for item in node.keys()])
-
     else:
         node_value = node
 
@@ -439,9 +436,9 @@ def invoke_api(client, module, swagger_spec):
             except (ClientError, ParamValidationError, MissingParametersError) as e:
                 module.fail_json(msg='Error creating API model: {0}'.format(e))
 
-            # create resources/paths
-            nodes = facts['resources']
-            results = crawl_tree(client, module, nodes, dict(rest_api_id=rest_api_id))
+            # create aws resource tree from swagger spec tree
+            root = facts.pop('tree')
+            results = crawl_tree(client, module, root, dict(rest_api_id=rest_api_id))
 
     else:
         if current_state == 'present':
@@ -453,19 +450,14 @@ def invoke_api(client, module, swagger_spec):
             except (ClientError, ParamValidationError, MissingParametersError) as e:
                 module.fail_json(msg='Error deleting REST API: {0}'.format(e))
 
+    if 'tree' in facts:
+        facts.pop('tree')
     return dict(changed=changed, results=dict(api_gw_facts=dict(current_state=current_state, swagger=fix_return(facts))))
 
 
-def crawl_tree(client, module, nodes, context):
+def crawl_tree(client, module, node, context):
 
     rest_api_id = context['rest_api_id']
-
-    # if '_' in nodes:
-    #     _node = nodes.pop('_')
-    # else:
-    #     _node =dict(path=)
-    #
-
 
     for node in nodes:
         results = crawl_tree(client, module, node, context)
@@ -513,14 +505,12 @@ def process_info(module, client, info_obj):
 
 def process_paths(module, client, paths_obj):
 
-    resource_tree = py_tree()
+    resource_tree = TreeNode('')
 
     for path in paths_obj.keys():
-        node = dict(path=path, ) #resource_methods=paths_obj[path])
+        resource_tree.add_path(path, 0, paths_obj[path])
 
-        add(resource_tree, path, node)
-
-    return dict(resources=resource_tree)
+    return dict(resources=paths_obj, tree=resource_tree)
 
 
 def process_definitions(module, client, definitions):
@@ -569,7 +559,9 @@ def main():
         state=dict(default='present', required=False, choices=['present', 'absent']),
         rest_api_id=dict(required=True,  default=None, aliases=['api_id']),
         swagger_spec=dict(required=True, default=None, aliases=['oai_spec']),
-        deploy=dict(required=False, default=False)
+        deploy=dict(type='bool', required=False, default=None),
+        stage_name=dict(required=False, default=None),
+        stage_description=dict(required=False, default=None)
         )
     )
 
@@ -577,7 +569,7 @@ def main():
         argument_spec=argument_spec,
         supports_check_mode=True,
         mutually_exclusive=[],
-        required_together=[]
+        required_together=[['deploy', 'stage_name','stage_description']]
     )
 
     # validate dependencies
