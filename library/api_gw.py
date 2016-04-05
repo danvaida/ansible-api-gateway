@@ -438,7 +438,20 @@ def invoke_api(client, module, swagger_spec):
 
             # create aws resource tree from swagger spec tree
             root = facts.pop('tree')
-            results = crawl_tree(client, module, root, dict(rest_api_id=rest_api_id))
+            try:
+                resources = client.get_resources(restApiId=rest_api_id, limit=500)['items']
+            except ClientError as e:
+                module.fail_json(msg="Error retrieving API's resources: {0}".format(e))
+
+            resource_dict = dict()
+            for resource in resources:
+                resource_dict[resource['path']] = resource
+
+            context = dict(
+                rest_api_id=rest_api_id,
+                resources=resource_dict,
+            )
+            results = crawl_tree(client, module, root, context)
 
     else:
         if current_state == 'present':
@@ -452,35 +465,36 @@ def invoke_api(client, module, swagger_spec):
 
     if 'tree' in facts:
         facts.pop('tree')
+
     return dict(changed=changed, results=dict(api_gw_facts=dict(current_state=current_state, swagger=fix_return(facts))))
 
 
 def crawl_tree(client, module, node, context):
 
     rest_api_id = context['rest_api_id']
+    parent_id = context.get('parent_id')
 
-    for node in nodes:
-        results = crawl_tree(client, module, node, context)
+    if parent_id:
+        try:
+            resource = client.create_resource(
+                restApiId=rest_api_id,
+                pathPart=node.path_part,
+                parentId=parent_id
+                )
+            node.resource_id = resource['id']
+            node.parent_id = resource['parentId']
+            context['parent_id'] = resource['id']
 
-    return nodes
+        except ClientError as e:
+            module.fail_json(msg="Error creating API resource {0} pid: {1}: {2}".format(node.path_part, parent_id, e))
+    else:
+        node.resource_id = context['resources'][node.path]['id']
+        context['parent_id'] = node.resource_id
 
+    for child_node in node.child_nodes:
+        results = crawl_tree(client, module, child_node, context)
 
-# def check_node(key_name, node, level):
-#
-#     check_list = []
-#     level += 1
-#
-#     if isinstance(node, dict):
-#         tlen = 101 - len(str(key_name)) - level*2
-#         check_list.append("{0}{1}:{2}".format(' '*level*2,  key_name, ' '*tlen))
-#
-#         for key in node.keys():
-#             check_list.extend(check_node(key, node[key], level))
-#     else:
-#         tlen = 100 - len(str(key_name)) - len(str(node)) - level*2
-#         check_list.append("{0}{1}: {2}{3}".format(' '*level*2,  key_name, node, ' '*tlen))
-#
-#     return check_list
+    return results
 
 
 def process_swagger(module, client, version):
