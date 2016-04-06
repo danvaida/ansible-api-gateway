@@ -183,7 +183,7 @@ class TreeNode:
     """
     def __init__(self, path, methods=None, resource_id=None, parent_id=None):
 
-        self.path = '/{0}'.format(path)
+        self.path = '/{0}'.format(path).strip()
         self.path_part = path.split('/')[-1]
         self.resource_id = resource_id
         self.parent_id = parent_id
@@ -194,6 +194,12 @@ class TreeNode:
             self.methods = {}
 
         self.child_nodes = {}
+
+    def __unicode__(self):
+        return u'<TreeNode: {0}'.format(self.path)
+
+    def __repr__(self):
+        return u'<TreeNode: {0}'.format(self.path)
 
     def add_path(self, full_path, index=0, methods=None):
         """
@@ -437,7 +443,8 @@ def invoke_api(client, module, swagger_spec):
                 module.fail_json(msg='Error creating API model: {0}'.format(e))
 
             # create aws resource tree from swagger spec tree
-            root = facts.pop('tree')
+            # root = facts.pop('tree')
+            root = facts['tree']
             try:
                 resources = client.get_resources(restApiId=rest_api_id, limit=500)['items']
             except ClientError as e:
@@ -451,7 +458,7 @@ def invoke_api(client, module, swagger_spec):
                 rest_api_id=rest_api_id,
                 resources=resource_dict,
             )
-            results = crawl_tree(client, module, root, context)
+            # results = crawl_tree(client, module, root, context)
 
     else:
         if current_state == 'present':
@@ -463,8 +470,8 @@ def invoke_api(client, module, swagger_spec):
             except (ClientError, ParamValidationError, MissingParametersError) as e:
                 module.fail_json(msg='Error deleting REST API: {0}'.format(e))
 
-    if 'tree' in facts:
-        facts.pop('tree')
+    # if 'tree' in facts:
+    #     facts.pop('tree')
 
     return dict(changed=changed, results=dict(api_gw_facts=dict(current_state=current_state, swagger=fix_return(facts))))
 
@@ -485,8 +492,8 @@ def crawl_tree(client, module, node, context):
             node.parent_id = resource['parentId']
             context['parent_id'] = resource['id']
 
-        except ClientError as e:
-            module.fail_json(msg="Error creating API resource {0} pid: {1}: {2}".format(node.path_part, parent_id, e))
+        except (ClientError, AttributeError) as e:
+            module.fail_json(msg="Error creating API resource {0} pid: {1}: {2}".format(node, parent_id, e))
     else:
         node.resource_id = context['resources'][node.path]['id']
         context['parent_id'] = node.resource_id
@@ -519,7 +526,7 @@ def process_info(module, client, info_obj):
 
 def process_paths(module, client, paths_obj):
 
-    resource_tree = TreeNode('')
+    resource_tree = TreeNode(' ')
 
     for path in paths_obj.keys():
         resource_tree.add_path(path, 0, paths_obj[path])
