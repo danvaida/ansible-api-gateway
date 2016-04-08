@@ -498,13 +498,15 @@ def crawl_tree(client, module, node, context):
         except (ClientError, AttributeError) as e:
             module.fail_json(msg="Error creating API resource {0} pid: {1}: {2}".format(node, parent_id, e))
     else:
+        # must be root node
         node.resource_id = context['resources'][node.path]['id']
         context['parent_id'] = node.resource_id
 
     for child_node in node.child_nodes:
-        results = crawl_tree(client, module, child_node, context)
+        context['parent_id'] = node.resource_id
+        crawl_tree(client, module, node.child_nodes[child_node], context)
 
-    return results
+    return
 
 
 def process_swagger(module, client, version):
