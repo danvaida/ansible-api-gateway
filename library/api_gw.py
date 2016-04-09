@@ -58,104 +58,6 @@ EXAMPLES = '''
     debug: var=results
 '''
 
-API_CONFIG = dict(
-    api_key=dict(
-        create=dict(required=['name', 'description', 'enabled', 'stage_keys'], optional=[], method='create'),
-        read=dict(required=['api_key'], optional=[], method='get'),
-        update=dict(required=['api_key'], optional=[], method='update'),
-        delete=dict(required=['api_key'], optional=[], method='delete'),
-    ),
-    base_path_mapping=dict(
-        create=dict(required=['domain_name', 'rest_api_id'], optional=['base_path', 'stage'], method='create'),
-        read=dict(required=['domain_name', 'base_path'], optional=[], method='get'),
-        update=dict(required=['domain_name', 'base_path'], optional=['patch_operations'], method='update'),
-        delete=dict(required=['domain_name', 'base_path'], optional=[], method='delete'),
-    ),
-    client_certificate=dict(
-        create=dict(required=['description'], optional=[], method='generate'),
-        read=dict(required=['client_certificate_id'], optional=[], method='get'),
-        update=dict(required=['client_certificate_id'], optional=['patch_operations'], method='update'),
-        delete=dict(required=['client_certificate_id'], optional=[], method='delete'),
-    ),
-    deployment=dict(
-        create=dict(required=['rest_api_id', 'stage_name'],
-                    optional=['stage_description', 'description', 'cache_cluster_enabled', 'cache_cluster_size', 'variables'],
-                    method='create'
-                    ),
-        read=dict(required=['rest_api_id', 'deployment_id'], optional=[], method='get'),
-        update=dict(required=['rest_api_id', 'deployment_id', 'patch_operations'], optional=[], method='update'),
-        delete=dict(required=['rest_api_id', 'deployment_id'], optional=[], method='delete'),
-    ),
-    domain_name=dict(
-        create=dict(required=['domain_name', 'certificate_name', 'certificate_body', 'certificate_private_key', 'certificate_chain'],
-                    optional=[],
-                    method='create'
-                    ),
-        read=dict(required=['domain_name'], optional=[], method='get'),
-        update=dict(required=['domain_name', 'patch_operations'], optional=[], method='update'),
-        delete=dict(required=['domain_name'], optional=[], method='delete'),
-    ),
-    integration=dict(
-        create=dict(required=['rest_api_id', 'resource_id', 'http_method', 'type'],
-                    optional=['integration_http_method', 'uri', 'credentials', 'request_parameters', 'request_templates', 'cache_namespace', 'cache_key_parameters'],
-                    method='put'
-                    ),
-        read=dict(required=['rest_api_id', 'resource_id', 'http_method'], optional=[], method='get'),
-        update=dict(required=['rest_api_id', 'resource_id', 'http_method', 'patch_operations'], optional=[], method='update'),
-        delete=dict(required=['rest_api_id', 'resource_id', 'http_method'], optional=[], method='delete'),
-    ),
-    integration_response=dict(
-        read=dict(required=['rest_api_id', 'resource_id', 'http_method', 'status_code'], optional=[], method='get'),
-    ),
-    method=dict(
-        create=dict(required=['rest_api_id', 'resource_id', 'http_method', 'authorization_type'],
-                    optional=['api_key_required', 'request_parameters', 'request_models'],
-                    method='put'
-                    ),
-        read=dict(required=['rest_api_id', 'resource_id', 'http_method'], optional=[], method='get'),
-        update=dict(required=['rest_api_id', 'resource_id', 'http_method', 'patch_operations'], optional=[], method='update'),
-        delete=dict(required=['rest_api_id', 'resource_id', 'http_method'], optional=[], method='delete'),
-    ),
-    method_response=dict(
-        create=dict(required=['rest_api_id', 'resource_id', 'http_method', 'status_code'],
-                    optional=['response_parameters', 'response_models'],
-                    method='put'
-                    ),
-        read=dict(required=['rest_api_id', 'resource_id', 'http_method', 'status_code'], optional=[], method='get'),
-        update=dict(required=['rest_api_id', 'resource_id', 'http_method', 'status_code'],
-                    optional=['patch_operations'],
-                    method='update'
-                    ),
-        delete=dict(required=['rest_api_id', 'resource_id', 'http_method', 'status_code'], optional=[], method='delete'),
-    ),
-    model=dict(
-        read=dict(required=['rest_api_id', 'model_name'], optional=['flatten'], method='get'),
-    ),
-    model_template=dict(
-        read=dict(required=['rest_api_id', 'model_name'], optional=[], method='get'),
-    ),
-    resource=dict(
-        create=dict(required=['rest_api_id', 'parent_id', 'path_part'], optional=[], method='create'),
-        read=dict(required=['rest_api_id', 'resource_id'], optional=[], method='get'),
-        update=dict(required=['rest_api_id', 'resource_id', 'patch_operations'], optional=[], method='update'),
-        delete=dict(required=['rest_api_id', 'resource_id'], optional=[], method='delete'),
-    ),
-    rest_api=dict(
-        create=dict(required=['name'], optional=['description', 'clone_from'], method='create'),
-        read=dict(required=['rest_api_id'], optional=[], method='get'),
-        update=dict(required=['rest_api_id', 'patch_operations'], optional=[], method='update'),
-        delete=dict(required=['rest_api_id'], optional=[], method='delete'),
-    ),
-    stage=dict(
-        create=dict(required=['rest_api_id', 'stage_name', 'deployment_id'],
-                    optional=['description', 'cache_cluster_enabled', 'cache_cluster_size', 'variables'],
-                    method='create'),
-        read=dict(required=['rest_api_id', 'stage_name'], optional=[], method='get'),
-        update=dict(required=['rest_api_id', 'stage_name', 'patch_operations'], optional=[], method='update'),
-        delete=dict(required=['rest_api_id'], optional=[], method='delete'),
-
-    )
-)
 
 SWAGGER_SPEC = dict(
     swagger=dict(required=True),
@@ -171,11 +73,6 @@ SWAGGER_SPEC = dict(
     host=dict(required=False),
     parameters=dict(required=False),
  )
-
-SWAGGER_OBJ = dict(
-    path=dict(type='dict', )
-
-)
 
 
 class TreeNode:
@@ -501,6 +398,9 @@ def crawl_tree(client, module, node, context):
         # must be root node
         node.resource_id = context['resources'][node.path]['id']
         context['parent_id'] = node.resource_id
+
+    # # add methods
+    # try:
 
     for child_node in node.child_nodes:
         context['parent_id'] = node.resource_id
