@@ -126,6 +126,25 @@ class TreeNode:
             else:
                 self.methods = methods
 
+    def build_from_path(self, path, methods=None):
+
+        if path == '/':
+            self.methods = methods
+            return
+
+        current_node = self
+        current_path = ['']
+        path_nodes = path.split('/')[1:]
+        for path_part in path_nodes:
+            current_path.append(path_part)
+            if path_part not in current_node.child_nodes:
+                current_node.child_nodes[path_part] = TreeNode('/'.join(current_path))
+            current_node = current_node.child_nodes[path_part]
+        current_node.methods = methods
+
+        return
+
+
 # ----------------------------------------------------
 #   hacks to implement a python tree-like structure
 # ----------------------------------------------------
@@ -431,12 +450,12 @@ def process_info(module, client, info_obj):
 
 def process_paths(module, client, paths_obj):
 
-    resource_tree = TreeNode('/')
+    swagger_tree = TreeNode('/')
 
     for path in paths_obj.keys():
-        resource_tree.add_path(path, 1, paths_obj[path])
+        swagger_tree.build_from_path(path, paths_obj[path])
 
-    return dict(resources=paths_obj, tree=resource_tree)
+    return dict(resources=paths_obj, tree=swagger_tree)
 
 
 def process_definitions(module, client, definitions):
