@@ -82,32 +82,53 @@ class TreeNode:
 
     rest_api_id = None
 
-    def __init__(self, path, methods=None, resource_id=None, parent_id=None):
+    def __init__(self, path, parent=None, **kwargs):
+        """
+
+        :param path:
+        :param methods:
+        :param resource_id:
+        :param parent_id:
+        :return: obj
+        """
 
         self.path = path
         self.path_part = path.split('/')[-1]
-        self.resource_id = resource_id
-        self.parent_id = parent_id
-
-        if methods:
-            self.methods = methods
-        else:
-            self.methods = {}
-
-        self.child_nodes = {}
+        self.resource_id = kwargs.get('resource_id')
+        self.parent = parent
+        self.methods = kwargs.get('methods', dict())
+        self.child_nodes = dict()
 
     def __unicode__(self):
-        return u'<TreeNode: {0}'.format(self.path)
+        return u'<TreeNode: {0}>'.format(self.path)
 
     def __repr__(self):
-        return u'<TreeNode: {0}'.format(self.path)
+        return u'<TreeNode: {0}>'.format(self.path)
+
+    def build_from_path(self, path, methods=None):
+
+        if path == '/':
+            self.methods = methods
+            return
+
+        current_node = self
+        current_path = ['']
+        path_nodes = path.split('/')[1:]
+        for path_part in path_nodes:
+            current_path.append(path_part)
+            if path_part not in current_node.child_nodes:
+                current_node.child_nodes[path_part] = TreeNode('/'.join(current_path), current_node)
+            current_node = current_node.child_nodes[path_part]
+        current_node.methods = methods
+
+        return
 
     def http_methods(self):
-        return self.methods.keys() or None
+        return self.methods.keys()
 
     def http_method_responses(self, http_method):
         try:
-            return self.methods[http_method]['responses']
+            return self.methods[http_method]['responses'].keys()
         except KeyError:
             return None
 
@@ -129,64 +150,18 @@ class TreeNode:
         except KeyError:
             return None
 
-    def build_from_path(self, path, methods=None):
+    # used for development only
+    def print_tree(self, level=1):
 
-        if path == '/':
-            self.methods = methods
-            return
+        print ' '*2*level, self.path_part, '(', self.path, ')'
 
-        current_node = self
-        current_path = ['']
-        path_nodes = path.split('/')[1:]
-        for path_part in path_nodes:
-            current_path.append(path_part)
-            if path_part not in current_node.child_nodes:
-                current_node.child_nodes[path_part] = TreeNode('/'.join(current_path))
-            current_node = current_node.child_nodes[path_part]
-        current_node.methods = methods
+        if self.methods:
+            for method in self.methods.keys():
+                print ' '*2*level, '   +', method
+                print ' '*2*level, '    |_', self.methods[method]['responses']
 
-        return
-
-
-# ----------------------------------------------------
-#   hacks to implement a python tree-like structure
-# ----------------------------------------------------
-
-def py_tree():
-    """
-    Create a python tree structure with magic.
-
-    :return: tree obj
-    """
-    return defaultdict(py_tree)
-
-
-def tree_to_dicts(tree):
-    """
-    Converts tree nodes to proper python dictionaries.
-
-    :param tree:
-    :return: dict
-    """
-    try:
-        return dict((key, tree_to_dicts(tree[key])) for key in tree)
-    except TypeError:
-        return tree
-
-
-def add(tree, resource_path, node_content):
-    """
-    Builds tree nodes based on resource paths. Content is appended as leaf nodes.
-
-    :param tree:
-    :param resource_path:
-    :param node_content:
-    """
-    nodes = resource_path.split('/')[1:]
-    for node in nodes:
-        tree = tree[node]
-
-    tree.update(_=node_content)
+        for child in self.child_nodes.keys():
+            self.child_nodes[child].print_tree(level+1)
 
 
 # ----------------------------------------------------
@@ -261,29 +236,17 @@ def fix_return(node):
 #   Resource management function
 # ----------------------------------
 
-def invoke_api(client, module, swagger_spec):
-    """
-    Needs a little more work....
+def get_rest_api(client, module, swagger_spec):
 
-    :param client:
-    :param module:
-    :return:
-    """
-    # resource_type = module.params['resource_type']
-    results = dict()
-    changed = False
-    current_state = 'absent'
-
-    state = module.params.get('state')
+    rest_api = None
+    info_title = None
+    rest_api_id = module.params['rest_api_id']
 
     try:
         info_title = swagger_spec['info']['title']
     except KeyError:
-        info_title = None
         module.fail_json(msg="Missing required value in swagger spec: info.title")
 
-    # check if REST API ID is specified, exists and is valid
-    rest_api_id = module.params['rest_api_id']
     if rest_api_id == '*':
         try:
             rest_apis = client.get_rest_apis(limit=500)['items']
@@ -298,10 +261,142 @@ def invoke_api(client, module, swagger_spec):
             try:
                 rest_api_id = choices[0]['id']
                 rest_api = client.get_rest_api(restApiId=rest_api_id)
-                current_state = 'present'
             except (ClientError, ParamValidationError, MissingParametersError) as e:
                 if not e.response['Error']['Code'] == 'NotFoundException':
                     module.fail_json(msg='Error retrieving REST API: {0}'.format(e))
+
+    return rest_api
+
+
+def get_resource_by_path(client, module, rest_api_id, path):
+
+    resource = None
+    try:
+        resource_items = client.get_resources(restApiId=rest_api_id, limit=500)['items']
+    except ClientError as e:
+        resource_items = None
+        module.fail_json(msg="Error retrieving API's resources: {0}".format(e))
+
+    for item in resource_items:
+        if item['path'] == path:
+            resource = item
+            break
+
+    return resource
+
+
+def create_rest_api(client, module, title, description):
+
+    rest_api = None
+    try:
+        rest_api = client.create_rest_api(
+            name=title,
+            description=description
+        )
+
+    except (ClientError, ParamValidationError, MissingParametersError) as e:
+        module.fail_json(msg='Error creating REST API: {0}'.format(e))
+
+    return rest_api
+
+
+def create_models(client, module, rest_api_id, schemas):
+
+    models = None
+
+    try:
+        for model in schemas.keys():
+            schema = schemas[model]
+            schema.update({
+                "$schema": "http://json-schema.org/draft-04/schema#",
+                "type": "object",
+                "title": "{0} schema".format(model)
+            })
+            models = client.create_model(
+                restApiId=rest_api_id,
+                name=model,
+                description='added by Ansible module',
+                contentType='application/json',
+                schema=json.dumps(schema)
+            )
+
+    except (ClientError, ParamValidationError, MissingParametersError) as e:
+        #TODO: should report warning or update existing model
+        if not e.response['Error']['Code'] == 'ConflictException':
+            module.fail_json(msg='Error creating API model {0}: {1}'.format(model, e))
+
+    return models
+
+
+def create_resource(client, module, rest_api_id, parent_id, path_part):
+
+    resource = None
+    try:
+        resource = client.create_resource(
+            restApiId=rest_api_id,
+            pathPart=path_part,
+            parentId=parent_id
+            )
+
+    except (ClientError, AttributeError) as e:
+        module.fail_json(msg="Error creating API resource {0} pid: {1}: {2}".format(path_part, parent_id, e))
+
+    return resource
+
+
+def put_method(client, module, rest_api_id, resource_id, http_method):
+
+    method = None
+    try:
+        method = client.put_method(
+            restApiId=rest_api_id,
+            resourceId=resource_id,
+            httpMethod=http_method,
+            authorizationType='NONE'
+            )
+
+    except (ClientError, AttributeError) as e:
+        module.fail_json(msg="Error creating HTTP method {0} rid: {1}: {2}".format(http_method, resource_id, e))
+
+    return method
+
+
+def put_method_response(client, module, rest_api_id, resource_id, http_method, status_code):
+
+    method_response = None
+
+    if str(status_code).startswith(('1', '2', '3', '4', '5')):
+        try:
+            method_response = client.put_method_response(
+                restApiId=rest_api_id,
+                resourceId=resource_id,
+                httpMethod=http_method,
+                statusCode=str(status_code)
+                )
+
+        except (ClientError, AttributeError) as e:
+            module.fail_json(msg="Error creating response {0} for method {1} rid: {2}: {3}".format(status_code, http_method, resource_id, e))
+
+    return method_response
+
+
+def invoke_api(client, module, swagger_spec):
+    """
+    Needs a little more work....
+
+    :param client:
+    :param module:
+    :return:
+    """
+    results = dict()
+    changed = False
+    current_state = 'absent'
+
+    state = module.params.get('state')
+
+    rest_api = get_rest_api(client, module, swagger_spec)
+    if rest_api:
+        current_state = 'present'
 
     # check for obvious type error: must be a dictionary
     if not isinstance(swagger_spec, dict):
@@ -345,52 +440,24 @@ def invoke_api(client, module, swagger_spec):
                 module.fail_json(msg='Error creating REST API: {0}'.format(e))
 
             # create models
-            try:
-                for model in facts['models'].keys():
-                    schema = facts['models'][model]
-                    schema.update({
-                        "$schema": "http://json-schema.org/draft-04/schema#",
-                        "type": "object",
-                        "title": "{0} schema".format(model)
-                    })
-                    results = client.create_model(
-                        restApiId=rest_api_id,
-                        name=model,
-                        description='added by Ansible module',
-                        contentType='application/json',
-                        schema=json.dumps(schema)
-                    )
-
-            except (ClientError, ParamValidationError, MissingParametersError) as e:
-                module.fail_json(msg='Error creating API model: {0}'.format(e))
+            create_models(client, module, rest_api_id, facts['models'])
 
             # create aws resource tree from swagger spec tree
-            # root = facts.pop('tree')
-            root = facts['tree']
-            try:
-                resources = client.get_resources(restApiId=rest_api_id, limit=500)['items']
-            except ClientError as e:
-                module.fail_json(msg="Error retrieving API's resources: {0}".format(e))
-
-            resource_dict = dict()
-            for resource in resources:
-                resource_dict[resource['path']] = resource
-
-            context = dict(
-                rest_api_id=rest_api_id,
-                resources=resource_dict,
-            )
-            results = crawl_tree(client, module, root, context)
+            root = facts.pop('tree')
+            root.resource_id = get_resource_by_path(client, module, rest_api_id, '/')['id']
+            TreeNode.rest_api_id = rest_api_id
+            results = crawl_tree(client, module, root)
 
     else:
         if current_state == 'present':
-            try:
-                rest_api = client.delete_rest_api(restApiId=rest_api_id)
-                facts.update(action='deleted')
-                changed = True
-
-            except (ClientError, ParamValidationError, MissingParametersError) as e:
-                module.fail_json(msg='Error deleting REST API: {0}'.format(e))
+            pass
+            # try:
+            #     rest_api = client.delete_rest_api(restApiId=rest_api_id)
+            #     facts.update(action='deleted')
+            #     changed = True
+            #
+            # except (ClientError, ParamValidationError, MissingParametersError) as e:
+            #     module.fail_json(msg='Error deleting REST API: {0}'.format(e))
 
     if 'tree' in facts:
         facts.pop('tree')
@@ -398,35 +465,23 @@ def invoke_api(client, module, swagger_spec):
     return dict(changed=changed, results=dict(api_gw_facts=dict(current_state=current_state, swagger=fix_return(facts))))
 
 
-def crawl_tree(client, module, node, context):
+def crawl_tree(client, module, node):
 
-    rest_api_id = context['rest_api_id']
-    parent_id = context.get('parent_id')
+    print "crawl resource_id: ", node.resource_id
 
-    if parent_id:
-        try:
-            resource = client.create_resource(
-                restApiId=rest_api_id,
-                pathPart=node.path_part,
-                parentId=parent_id
-                )
-            node.resource_id = resource['id']
-            node.parent_id = resource['parentId']
-            context['parent_id'] = resource['id']
+    if node.parent:
+        # not the root node
+        resource = create_resource(client, module, node.rest_api_id, node.parent.resource_id, node.path_part)
+        node.resource_id = resource['id']
 
-        except (ClientError, AttributeError) as e:
-            module.fail_json(msg="Error creating API resource {0} pid: {1}: {2}".format(node, parent_id, e))
-    else:
-        # must be root node
-        node.resource_id = context['resources'][node.path]['id']
-        context['parent_id'] = node.resource_id
-
-    # # add methods
-    # try:
+        for http_method in node.http_methods():
+            put_method(client, module, node.rest_api_id, node.resource_id, http_method)
+            for status_code in node.http_method_responses(http_method):
+                put_method_response(client, module, node.rest_api_id, node.resource_id, http_method, status_code)
 
     for child_node in node.child_nodes:
-        context['parent_id'] = node.resource_id
-        crawl_tree(client, module, node.child_nodes[child_node], context)
+        print "child node: ", child_node
+        crawl_tree(client, module, node.child_nodes[child_node])
 
     return
 
@@ -457,6 +512,9 @@ def process_paths(module, client, paths_obj):
 
     for path in paths_obj.keys():
         swagger_tree.build_from_path(path, paths_obj[path])
+
+    print '\n** Resource Tree **\n'
+    swagger_tree.print_tree()
 
     return dict(resources=paths_obj, tree=swagger_tree)
 
@@ -489,6 +547,7 @@ def process_base_path(module, client, path):
         base_path = path
 
     return dict(basePath=base_path)
+
 
 # ----------------------------------
 #           Main function
