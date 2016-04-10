@@ -79,6 +79,9 @@ class TreeNode:
     """
     Represents a node in a tree-like structure of API Gateway resources.
     """
+
+    rest_api_id = None
+
     def __init__(self, path, methods=None, resource_id=None, parent_id=None):
 
         self.path = path
@@ -99,32 +102,32 @@ class TreeNode:
     def __repr__(self):
         return u'<TreeNode: {0}'.format(self.path)
 
-    def add_path(self, full_path, index=0, methods=None):
-        """
-        Given the full path to a resource, add resource nodes as required until last one reached, at which point
-        methods can be assigned.  The 'path' attribute becomes the hash key of the resource list.
+    def http_methods(self):
+        return self.methods.keys() or None
 
-        :param full_path:
-        :param index:
-        :param methods:
-        :return:
-        """
+    def http_method_responses(self, http_method):
+        try:
+            return self.methods[http_method]['responses']
+        except KeyError:
+            return None
 
-        nodes = full_path.split('/')
-        path = '/'.join(nodes[0:index+1])
-        path_part = nodes[index]
+    def http_method_response(self, http_method, status_code):
+        try:
+            return self.methods[http_method]['responses'][status_code]
+        except KeyError:
+            return None
 
-        if path_part and path_part not in self.child_nodes:
-            self.child_nodes[path_part] = TreeNode(path)
+    def http_method_integration(self, http_method):
+        try:
+            return self.methods[http_method]['x-amazon-apigateway-integration']
+        except KeyError:
+            return None
 
-        index += 1
-        if index < len(nodes):
-            self.child_nodes[path_part].add_path(full_path, index, methods)
-        else:
-            if path_part:
-                self.child_nodes[path_part].methods = methods
-            else:
-                self.methods = methods
+    def http_method_integration_response(self, http_method, status_code):
+        try:
+            return self.methods[http_method]['x-amazon-apigateway-integration']['responses'][status_code]
+        except KeyError:
+            return None
 
     def build_from_path(self, path, methods=None):
 
