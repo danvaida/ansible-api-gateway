@@ -380,6 +380,32 @@ def put_method_response(client, module, rest_api_id, resource_id, http_method, s
     return method_response
 
 
+def put_integration(client, module, rest_api_id, resource_id, http_method, integration):
+
+    method_integration = None
+
+    api_params = dict(
+        restApiId=rest_api_id,
+        resourceId=resource_id,
+        httpMethod=http_method,
+        type=integration['type'].upper()
+    )
+    del integration['type']
+    del integration['responses']
+    if integration.get('httpMethod'):
+        integration['integrationHttpMethod'] = integration['httpMethod']
+        del integration['httpMethod']
+
+    api_params.update(integration)
+
+    try:
+        method_integration = client.put_integration(**api_params)
+    except (ClientError, ParamValidationError, MissingParametersError) as e:
+        module.fail_json(msg="Error creating integration for method {0} rid: {1}: {2}".format(http_method, resource_id, e))
+
+    return method_integration
+
+
 def invoke_api(client, module, swagger_spec):
     """
     Needs a little more work....
@@ -478,6 +504,8 @@ def crawl_tree(client, module, node):
             put_method(client, module, node.rest_api_id, node.resource_id, http_method)
             for status_code in node.http_method_responses(http_method):
                 put_method_response(client, module, node.rest_api_id, node.resource_id, http_method, status_code)
+
+            put_integration(client, module, node.rest_api_id, node.resource_id, http_method, node.http_method_integration(http_method))
 
     for child_node in node.child_nodes:
         print "child node: ", child_node
