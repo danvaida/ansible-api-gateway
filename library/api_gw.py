@@ -144,6 +144,12 @@ class TreeNode:
         except KeyError:
             return None
 
+    def http_method_integration_responses(self, http_method):
+        try:
+            return self.methods[http_method]['x-amazon-apigateway-integration']['responses'].keys()
+        except KeyError:
+            return None
+
     def http_method_integration_response(self, http_method, status_code):
         try:
             return self.methods[http_method]['x-amazon-apigateway-integration']['responses'][status_code]
@@ -158,7 +164,7 @@ class TreeNode:
         if self.methods:
             for method in self.methods.keys():
                 print ' '*2*level, '   +', method
-                print ' '*2*level, '    |_', self.methods[method]['responses']
+                print ' '*2*level, '    |_', self.methods[method]['x-amazon-apigateway-integration']['responses']
 
         for child in self.child_nodes.keys():
             self.child_nodes[child].print_tree(level+1)
@@ -338,7 +344,7 @@ def create_resource(client, module, rest_api_id, parent_id, path_part):
             parentId=parent_id
             )
 
-    except (ClientError, AttributeError) as e:
+    except (ClientError, ParamValidationError, MissingParametersError) as e:
         module.fail_json(msg="Error creating API resource {0} pid: {1}: {2}".format(path_part, parent_id, e))
 
     return resource
@@ -355,7 +361,7 @@ def put_method(client, module, rest_api_id, resource_id, http_method):
             authorizationType='NONE'
             )
 
-    except (ClientError, AttributeError) as e:
+    except (ClientError, ParamValidationError, MissingParametersError) as e:
         module.fail_json(msg="Error creating HTTP method {0} rid: {1}: {2}".format(http_method, resource_id, e))
 
     return method
@@ -374,7 +380,7 @@ def put_method_response(client, module, rest_api_id, resource_id, http_method, s
                 statusCode=str(status_code)
                 )
 
-        except (ClientError, AttributeError) as e:
+        except (ClientError, ParamValidationError, MissingParametersError) as e:
             module.fail_json(msg="Error creating response {0} for method {1} rid: {2}: {3}".format(status_code, http_method, resource_id, e))
 
     return method_response
@@ -388,15 +394,15 @@ def put_integration(client, module, rest_api_id, resource_id, http_method, integ
         restApiId=rest_api_id,
         resourceId=resource_id,
         httpMethod=http_method,
-        type=integration['type'].upper()
+        type=integration['type'].upper(),
     )
-    del integration['type']
-    del integration['responses']
-    if integration.get('httpMethod'):
-        integration['integrationHttpMethod'] = integration['httpMethod']
-        del integration['httpMethod']
 
-    api_params.update(integration)
+    if 'httpMethod' in integration:
+        api_params['integrationHttpMethod'] = integration['httpMethod']
+
+    for optional_params in ('uri', 'credentials', 'requestParameters', 'requestTemplates', 'cacheNameSpace', 'cacheKeyParameters'):
+        if optional_params in integration:
+            api_params[optional_params] = integration[optional_params]
 
     try:
         method_integration = client.put_integration(**api_params)
@@ -404,6 +410,30 @@ def put_integration(client, module, rest_api_id, resource_id, http_method, integ
         module.fail_json(msg="Error creating integration for method {0} rid: {1}: {2}".format(http_method, resource_id, e))
 
     return method_integration
+
+
+def put_integration_response(client, module, rest_api_id, resource_id, http_method, selection_pattern, integration_response):
+
+    response = None
+
+    api_params = dict(
+        restApiId=rest_api_id,
+        resourceId=resource_id,
+        httpMethod=http_method,
+        statusCode=integration_response['statusCode'],
+        selectionPattern=selection_pattern
+    )
+
+    for optional_params in ('responseParameters', 'responseTemplates'):
+        if optional_params in integration_response:
+            api_params[optional_params] = integration_response[optional_params]
+
+    try:
+        response = client.put_integration_response(**api_params)
+    except (ClientError, ParamValidationError, MissingParametersError) as e:
+        module.fail_json(msg="Error creating integration response '{0}' for method '{1}', rid: {2}: {3}".format(selection_pattern, http_method, resource_id, e))
+
+    return response
 
 
 def invoke_api(client, module, swagger_spec):
@@ -476,14 +506,13 @@ def invoke_api(client, module, swagger_spec):
 
     else:
         if current_state == 'present':
-            pass
-            # try:
-            #     rest_api = client.delete_rest_api(restApiId=rest_api_id)
-            #     facts.update(action='deleted')
-            #     changed = True
-            #
-            # except (ClientError, ParamValidationError, MissingParametersError) as e:
-            #     module.fail_json(msg='Error deleting REST API: {0}'.format(e))
+            try:
+                # rest_api = client.delete_rest_api(restApiId=rest_api_id)
+                # facts.update(action='deleted')
+                changed = True
+
+            except (ClientError, ParamValidationError, MissingParametersError) as e:
+                module.fail_json(msg='Error deleting REST API: {0}'.format(e))
 
     if 'tree' in facts:
         facts.pop('tree')
@@ -506,6 +535,9 @@ def crawl_tree(client, module, node):
                 put_method_response(client, module, node.rest_api_id, node.resource_id, http_method, status_code)
 
             put_integration(client, module, node.rest_api_id, node.resource_id, http_method, node.http_method_integration(http_method))
+
+            for selection_pattern in node.http_method_integration_responses(http_method):
+                put_integration_response(client, module, node.rest_api_id, node.resource_id, http_method, selection_pattern , node.http_method_integration_response(http_method, selection_pattern))
 
     for child_node in node.child_nodes:
         print "child node: ", child_node
