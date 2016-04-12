@@ -381,7 +381,8 @@ def put_method_response(client, module, rest_api_id, resource_id, http_method, s
     if 'headers' in response:
         response_parameters = dict()
         for header in response['headers'].keys():
-            response_parameters[header] = True
+            destination = 'method.response.header.{0}'.format(header)
+            response_parameters[destination] = True
 
         if response_parameters:
             api_params['responseParameters'] = response_parameters
