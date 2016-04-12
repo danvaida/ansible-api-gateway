@@ -18,6 +18,7 @@ import datetime
 import yaml
 import json
 import sys
+import re
 
 from collections import defaultdict
 
@@ -292,6 +293,15 @@ def get_resource_by_path(client, module, rest_api_id, path):
 
 
 def create_rest_api(client, module, title, description):
+    """
+    Creates a new API with 'default' model and root resource node.
+
+    :param client:
+    :param module:
+    :param title:
+    :param description:
+    :return: API Id
+    """
 
     rest_api = None
     try:
@@ -303,7 +313,26 @@ def create_rest_api(client, module, title, description):
     except (ClientError, ParamValidationError, MissingParametersError) as e:
         module.fail_json(msg='Error creating REST API: {0}'.format(e))
 
-    return rest_api
+    return rest_api['id']
+
+
+def delete_rest_api(client, module, rest_api_id):
+    """
+    Deletes the entire API, including associated models.
+
+    :param client:
+    :param module:
+    :param rest_api_id:
+    :return:
+    """
+
+    try:
+        client.delete_rest_api(restApiId=rest_api_id)
+
+    except (ClientError, ParamValidationError, MissingParametersError) as e:
+        module.fail_json(msg='Error deleting REST API: {0}'.format(e))
+
+    return
 
 
 def create_models(client, module, rest_api_id, schemas):
@@ -371,6 +400,9 @@ def put_method_response(client, module, rest_api_id, resource_id, http_method, s
 
     method_response = None
 
+    if not re.match(r'^[2-6]\d\d$', str(status_code)):
+        module.fail_json(msg="Error creating response {0} for method {1} rid: {2}: invalid response code.".format(status_code, http_method, resource_id))
+
     api_params = dict(
         restApiId=rest_api_id,
         resourceId=resource_id,
@@ -387,12 +419,11 @@ def put_method_response(client, module, rest_api_id, resource_id, http_method, s
         if response_parameters:
             api_params['responseParameters'] = response_parameters
 
-    if str(status_code).startswith(('1', '2', '3', '4', '5')):
-        try:
-            method_response = client.put_method_response(**api_params)
+    try:
+        method_response = client.put_method_response(**api_params)
 
-        except (ClientError, ParamValidationError, MissingParametersError) as e:
-            module.fail_json(msg="Error creating response {0} for method {1} rid: {2}: {3}".format(status_code, http_method, resource_id, e))
+    except (ClientError, ParamValidationError, MissingParametersError) as e:
+        module.fail_json(msg="Error creating response {0} for method {1} rid: {2}: {3}".format(status_code, http_method, resource_id, e))
 
     return method_response
 
@@ -447,14 +478,15 @@ def put_integration_response(client, module, rest_api_id, resource_id, http_meth
     return response
 
 
-def invoke_api(client, module, swagger_spec):
+def manage_state(client, module, swagger_spec):
     """
-    Needs a little more work....
 
     :param client:
     :param module:
+    :param swagger_spec:
     :return:
     """
+
     results = dict()
     changed = False
     current_state = 'absent'
@@ -464,6 +496,7 @@ def invoke_api(client, module, swagger_spec):
     rest_api = get_rest_api(client, module, swagger_spec)
     if rest_api:
         current_state = 'present'
+        rest_api_id = rest_api['id']
 
     # check for obvious type error: must be a dictionary
     if not isinstance(swagger_spec, dict):
@@ -494,17 +527,7 @@ def invoke_api(client, module, swagger_spec):
         else:
             # create API
 
-            try:
-                rest_api = client.create_rest_api(
-                    name=facts['info']['title'],
-                    description=facts['info']['description']
-                )
-                facts.update(action='created', rest_api=rest_api)
-                rest_api_id = rest_api['id']
-                changed = True
-
-            except (ClientError, ParamValidationError, MissingParametersError) as e:
-                module.fail_json(msg='Error creating REST API: {0}'.format(e))
+            rest_api_id = create_rest_api(client, module, facts['info']['title'], facts['info']['description'])
 
             # create models
             create_models(client, module, rest_api_id, facts['models'])
@@ -513,17 +536,14 @@ def invoke_api(client, module, swagger_spec):
             root = facts.pop('tree')
             root.resource_id = get_resource_by_path(client, module, rest_api_id, '/')['id']
             TreeNode.rest_api_id = rest_api_id
-            results = crawl_tree(client, module, root)
+            crawl_tree(client, module, root)
 
+            changed = True
     else:
         if current_state == 'present':
-            try:
-                # rest_api = client.delete_rest_api(restApiId=rest_api_id)
-                # facts.update(action='deleted')
-                changed = True
-
-            except (ClientError, ParamValidationError, MissingParametersError) as e:
-                module.fail_json(msg='Error deleting REST API: {0}'.format(e))
+            # delete the API
+            delete_rest_api(rest_api_id)
+            changed = True
 
     if 'tree' in facts:
         facts.pop('tree')
@@ -693,7 +713,7 @@ def main():
         module.fail_json(msg='Invalid or missing API specification: {0}'.format(e))
 
 
-    response = invoke_api(client, module, swagger_spec)
+    response = manage_state(client, module, swagger_spec)
 
     results = dict(ansible_facts=response['results'], changed=response['changed'])
 
