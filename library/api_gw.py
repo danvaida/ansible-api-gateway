@@ -367,18 +367,28 @@ def put_method(client, module, rest_api_id, resource_id, http_method):
     return method
 
 
-def put_method_response(client, module, rest_api_id, resource_id, http_method, status_code):
+def put_method_response(client, module, rest_api_id, resource_id, http_method, status_code, response):
 
     method_response = None
 
+    api_params = dict(
+        restApiId=rest_api_id,
+        resourceId=resource_id,
+        httpMethod=http_method,
+        statusCode=str(status_code)
+    )
+
+    if 'headers' in response:
+        response_parameters = dict()
+        for header in response['headers'].keys():
+            response_parameters[header] = True
+
+        if response_parameters:
+            api_params['responseParameters'] = response_parameters
+
     if str(status_code).startswith(('1', '2', '3', '4', '5')):
         try:
-            method_response = client.put_method_response(
-                restApiId=rest_api_id,
-                resourceId=resource_id,
-                httpMethod=http_method,
-                statusCode=str(status_code)
-                )
+            method_response = client.put_method_response(**api_params)
 
         except (ClientError, ParamValidationError, MissingParametersError) as e:
             module.fail_json(msg="Error creating response {0} for method {1} rid: {2}: {3}".format(status_code, http_method, resource_id, e))
@@ -532,7 +542,7 @@ def crawl_tree(client, module, node):
         for http_method in node.http_methods():
             put_method(client, module, node.rest_api_id, node.resource_id, http_method)
             for status_code in node.http_method_responses(http_method):
-                put_method_response(client, module, node.rest_api_id, node.resource_id, http_method, status_code)
+                put_method_response(client, module, node.rest_api_id, node.resource_id, http_method, status_code, node.http_method_response(http_method, status_code))
 
             put_integration(client, module, node.rest_api_id, node.resource_id, http_method, node.http_method_integration(http_method))
 
