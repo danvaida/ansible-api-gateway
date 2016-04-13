@@ -82,6 +82,8 @@ class TreeNode:
     """
 
     rest_api_id = None
+    base_path = None
+    swagger_version = '2.0'
 
     def __init__(self, path, parent=None, **kwargs):
         """
@@ -165,7 +167,7 @@ class TreeNode:
         if self.methods:
             for method in self.methods.keys():
                 print ' '*2*level, '   +', method
-                print ' '*2*level, '    |_', self.methods[method]['x-amazon-apigateway-integration']['responses']
+                print ' '*2*level, '    |_', self.methods[method]['responses']
 
         for child in self.child_nodes.keys():
             self.child_nodes[child].print_tree(level+1)
@@ -466,7 +468,7 @@ def put_integration_response(client, module, rest_api_id, resource_id, http_meth
         selectionPattern=selection_pattern
     )
 
-    for optional_params in ('responseParameters', 'responseTemplates'):
+    for optional_params in ('responseParameters', 'responseTemplates', ):
         if optional_params in integration_response:
             api_params[optional_params] = integration_response[optional_params]
 
@@ -526,7 +528,6 @@ def manage_state(client, module, swagger_spec):
             changed = False
         else:
             # create API
-
             rest_api_id = create_rest_api(client, module, facts['info']['title'], facts['info']['description'])
 
             # create models
@@ -579,10 +580,13 @@ def crawl_tree(client, module, node):
 
 def process_swagger(module, client, version):
 
-    if not version == '2.0':
-        module.fail_json(msg="Invalid Swagger specification version: '{0}' ".format(version))
+    swagger_version = '2.0'
 
-    return dict(version=version)
+    if version:
+        swagger_version = version
+        TreeNode.swagger_version = version
+
+    return dict(version=swagger_version)
 
 
 def process_info(module, client, info_obj):
@@ -636,6 +640,7 @@ def process_base_path(module, client, path):
 
     if path:
         base_path = path
+        TreeNode.base_path = path
 
     return dict(basePath=base_path)
 
