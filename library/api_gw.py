@@ -47,16 +47,38 @@ description:
 version_added: "2.1"
 author: Pierre Jodouin (@pjodouin)
 options:
+  state:
+    description:
+      - Describes the desired state and defaults to "present".
+    required: true
+    default: "present"
+    choices: ["present", "absent"]
 
+requirements:
+    - boto3
+extends_documentation_fragment:
+    - aws
 '''
 
 EXAMPLES = '''
 ---
 - hosts: localhost
   gather_facts: no
+  vars:
+    state: present
+    api_gw_spec_file: /path/to/samples/LambdaMicroservice-Dev.yaml
+    deployment_package: lambda.zip
 
-  - name: display stuff
-    debug: var=results
+  tasks:
+  - name: AWS API Gateway
+    api_gw:
+      state: "{{ state | default('present') }}"
+      api_id: '*'
+      deploy_api: True
+      swagger_spec: "{{ api_gw_spec_file }}"
+
+  - name: show results
+    debug: var=api_gw_facts
 '''
 
 
