@@ -19,6 +19,8 @@ import yaml
 import json
 import sys
 import re
+import os
+import tempfile
 
 from collections import defaultdict
 
@@ -135,6 +137,13 @@ class TreeNode:
     swagger_version = '2.0'
 
     def __init__(self, path, parent=None, **kwargs):
+        """
+
+        :param path:
+        :param parent:
+        :param kwargs:
+        :return:
+        """
 
         self.path = path
         self.path_part = path.split('/')[-1]
@@ -277,6 +286,25 @@ def fix_return(node):
         node_value = node
 
     return node_value
+
+
+def validate_swagger_spec(spec_file):
+    """
+    Validate the swagger specification using validator module.
+
+    :param spec_file:
+    :return:
+    """
+
+    try:
+        validate_spec_url('file://{}'.format(spec_file))
+        msg = None
+        valid = True
+    except SwaggerValidationError as e:
+        msg = e.message.split('\n', 1)[0]
+        valid = False
+
+    return dict(valid=valid, msg=msg)
 
 
 # ----------------------------------
@@ -702,7 +730,9 @@ def main():
         swagger_spec=dict(required=True, default=None, aliases=['oai_spec']),
         deploy=dict(type='bool', required=False, default=None),
         stage_name=dict(required=False, default=None),
-        stage_description=dict(required=False, default=None)
+        stage_description=dict(required=False, default=None),
+        api_resource_limit=dict(type='int', required=False, default=300),
+        rest_api_limit=dict(type='int', required=False, default=60)
         )
     )
 
@@ -730,31 +760,39 @@ def main():
     except Exception, e:
         module.fail_json(msg="Connection Error - {0}".format(e))
 
+    if module.params['rest_api_limit'] < 501:
+        AWS_REST_API_LIMIT  =  module.params['res_api_limit']
+
+    if module.params['resource_limit'] < 501:
+        AWS_API_RESOURCE_LIMIT  =  module.params['api_resource_limit']
+
     spec_file = module.params['swagger_spec']
 
-    if HAS_SWAGGER_VALIDATOR:
-        if spec_file.endswith(('.json', '.jsn')):
-            try:
-                validate_spec_url('file://{0}'.format(spec_file))
-            except SwaggerValidationError as e:
-
-                msg = e.message.split('\n', 1)[0]
-                module.fail_json(msg='Error validating Swagger specification: {0}'.format(msg))
-        else:
-            #TODO: could convert YAML to JSON in tmp folder
-            pass
-
-    # read the swagger/oai spec file as it's assumed to be valid
     try:
         with open(spec_file, 'r') as spec_data:
-            if spec_file.endswith(('.yml', '.yaml')):
-                swagger_spec = yaml.load(spec_data)
+            if HAS_SWAGGER_VALIDATOR:
+                if spec_file.endswith(('.yml', '.yaml')):
+                    # convert to JSON first as validator doesn't do YAML
+                    swagger_spec = yaml.load(spec_data)
+                    temp_file = tempfile.NamedTemporaryFile(delete=False)
+                    temp_file.write(json.dumps(swagger_spec))
+                    temp_file.close()
+                    spec = validate_swagger_spec(temp_file.name)
+                    os.remove(temp_file.name)
+                else:
+                    swagger_spec = json.load(spec_data)
+                    spec = validate_swagger_spec(spec_file)
+
+                if not spec['valid']:
+                    module.fail_json(msg='Error validating Swagger specification: {0}'.format(spec['msg']))
             else:
-                swagger_spec = json.load(spec_data)
+                if spec_file.endswith(('.yml', '.yaml')):
+                    swagger_spec = yaml.load(spec_data)
+                else:
+                    swagger_spec = json.load(spec_data)
 
-    except Exception as e:
-        module.fail_json(msg='Invalid or missing API specification: {0}'.format(e))
-
+    except (IOError, EOFError, ValueError) as e:
+        module.fail_json(msg="Invalid or missing API specification: {0}".format(e))
 
     response = manage_state(client, module, swagger_spec)
 
