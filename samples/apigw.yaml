@@ -1,0 +1,18 @@
+---
+- hosts: localhost
+  gather_facts: no
+  vars:
+    state: present
+    api_gw_spec_file: /Users/pjodouin/projects/ansible-api-gateway/samples/swagger-parms.json
+    account: 123456789012
+
+  tasks:
+  - name: AWS API Gateway
+    api_gw:
+      state: "{{ state | default('present') }}"
+      api_id: '*'
+#      deploy_api: True
+      swagger_spec: "{{ api_gw_spec_file }}"
+
+  - name: show results
+    debug: var=api_gw_facts
