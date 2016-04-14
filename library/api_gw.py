@@ -53,7 +53,31 @@ options:
     required: true
     default: "present"
     choices: ["present", "absent"]
-
+  rest_api_id:
+    description:
+      - Unique identifier of API. Use '*' if unknown, when first creating the API for example.
+    required: true
+    default: none
+  swagger_spec:
+    description:
+      - File path to JSON/YAML Swagger API specification file.
+    required: true
+    default: none
+  deploy:
+    description:
+      - Specifies whether the API should be deployed or not.
+    required: false
+    default: none
+  stage_name:
+    description:
+      - Stage name of deployment.
+    required: false
+    default: none
+  stage_description:
+    description:
+      - Stage description of deployment.
+    required: false
+    default: none
 requirements:
     - boto3
 extends_documentation_fragment:
@@ -81,7 +105,7 @@ EXAMPLES = '''
     debug: var=api_gw_facts
 '''
 
-
+# top level swagger specification keys
 SWAGGER_SPEC = dict(
     swagger=dict(required=True),
     info=dict(required=True),
@@ -97,6 +121,9 @@ SWAGGER_SPEC = dict(
     parameters=dict(required=False),
  )
 
+# AWS resource limits
+AWS_REST_API_LIMIT = 60
+AWS_API_RESOURCE_LIMIT = 300
 
 class TreeNode:
     """
@@ -108,14 +135,6 @@ class TreeNode:
     swagger_version = '2.0'
 
     def __init__(self, path, parent=None, **kwargs):
-        """
-
-        :param path:
-        :param methods:
-        :param resource_id:
-        :param parent_id:
-        :return: obj
-        """
 
         self.path = path
         self.path_part = path.split('/')[-1]
@@ -226,10 +245,7 @@ def get_api_params(module):
     """
     Check for presence of parameters, required or optional and change parameter case for API.
 
-    :param params: AWS parameters needed for API
     :param module: Ansible module reference
-    :param resource_type:
-    :param required:
     :return:
     """
     params = module.params['resource_params']
@@ -280,7 +296,7 @@ def get_rest_api(client, module, swagger_spec):
 
     if rest_api_id == '*':
         try:
-            rest_apis = client.get_rest_apis(limit=500)['items']
+            rest_apis = client.get_rest_apis(limit=AWS_REST_API_LIMIT)['items']
             choices = [api for api in rest_apis if api['name'] == info_title]
         except ClientError as e:
             choices = None
@@ -303,7 +319,7 @@ def get_resource_by_path(client, module, rest_api_id, path):
 
     resource = None
     try:
-        resource_items = client.get_resources(restApiId=rest_api_id, limit=500)['items']
+        resource_items = client.get_resources(restApiId=rest_api_id, limit=AWS_API_RESOURCE_LIMIT)['items']
     except ClientError as e:
         resource_items = None
         module.fail_json(msg="Error retrieving API's resources: {0}".format(e))
@@ -719,7 +735,7 @@ def main():
     if HAS_SWAGGER_VALIDATOR:
         if spec_file.endswith(('.json', '.jsn')):
             try:
-                validate_spec_url('file://{}'.format(spec_file))
+                validate_spec_url('file://{0}'.format(spec_file))
             except SwaggerValidationError as e:
 
                 msg = e.message.split('\n', 1)[0]
