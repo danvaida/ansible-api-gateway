@@ -467,7 +467,9 @@ def put_method(client, module, rest_api_id, resource_id, http_method, method_par
             httpMethod=http_method
     )
 
-    if 'authorizationType' not in method_params:
+    if 'x-amazon-apigateway-auth' in method_params:
+        api_params['authorizationType'] = method_params['x-amazon-apigateway-auth'].get('type', 'NONE')
+    else:
         api_params['authorizationType'] = 'NONE'
 
     for optional_params in ('authorizerId', 'apiKeyRequired', 'requestModels'):
