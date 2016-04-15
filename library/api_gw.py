@@ -140,9 +140,10 @@ class TreeNode:
         """
 
         :param path:
-        :param parent:
-        :param kwargs:
-        :return:
+        :param methods:
+        :param resource_id:
+        :param parent_id:
+        :return: obj
         """
 
         self.path = path
@@ -175,6 +176,12 @@ class TreeNode:
         current_node.methods = methods
 
         return
+
+    def http_method(self, http_method):
+        try:
+            return self.methods[http_method]
+        except KeyError:
+            return None
 
     def http_methods(self):
         return self.methods.keys()
@@ -217,7 +224,7 @@ class TreeNode:
         if self.methods:
             for method in self.methods.keys():
                 print ' '*2*level, '   +', method
-                print ' '*2*level, '    |_', self.methods[method]['responses']
+                print ' '*2*level, '    |_', self.methods[method]
 
         for child in self.child_nodes.keys():
             self.child_nodes[child].print_tree(level+1)
@@ -247,14 +254,17 @@ def cc(key):
     """
     token = pc(key)
 
-    return "{}{}".format(token[0].lower(), token[1:])
+    return "{0}{1}".format(token[0].lower(), token[1:])
 
 
 def get_api_params(module):
     """
     Check for presence of parameters, required or optional and change parameter case for API.
 
+    :param params: AWS parameters needed for API
     :param module: Ansible module reference
+    :param resource_type:
+    :param required:
     :return:
     """
     params = module.params['resource_params']
@@ -324,7 +334,7 @@ def get_rest_api(client, module, swagger_spec):
 
     if rest_api_id == '*':
         try:
-            rest_apis = client.get_rest_apis(limit=AWS_REST_API_LIMIT)['items']
+            rest_apis = client.get_rest_apis(limit=500)['items']
             choices = [api for api in rest_apis if api['name'] == info_title]
         except ClientError as e:
             choices = None
@@ -347,7 +357,7 @@ def get_resource_by_path(client, module, rest_api_id, path):
 
     resource = None
     try:
-        resource_items = client.get_resources(restApiId=rest_api_id, limit=AWS_API_RESOURCE_LIMIT)['items']
+        resource_items = client.get_resources(restApiId=rest_api_id, limit=500)['items']
     except ClientError as e:
         resource_items = None
         module.fail_json(msg="Error retrieving API's resources: {0}".format(e))
@@ -447,16 +457,34 @@ def create_resource(client, module, rest_api_id, parent_id, path_part):
     return resource
 
 
-def put_method(client, module, rest_api_id, resource_id, http_method):
+def put_method(client, module, rest_api_id, resource_id, http_method, method_params):
 
     method = None
-    try:
-        method = client.put_method(
+
+    api_params = dict(
             restApiId=rest_api_id,
             resourceId=resource_id,
-            httpMethod=http_method,
-            authorizationType='NONE'
-            )
+            httpMethod=http_method
+    )
+
+    if 'authorizationType' not in method_params:
+        api_params['authorizationType'] = 'NONE'
+
+    for optional_params in ('authorizerId', 'apiKeyRequired', 'requestModels'):
+        if optional_params in method_params:
+            api_params[optional_params] = method_params[optional_params]
+
+    if 'parameters' in method_params:
+        request_parameters = dict()
+        for parameter in method_params['parameters']:
+            if parameter['in'] == 'query':
+                destination = 'method.request.{0}.{1}'.format('querystring', parameter['name'])
+                request_parameters[destination] = parameter['required']
+        if request_parameters:
+            api_params['requestParameters'] = request_parameters
+
+    try:
+        method = client.put_method(**api_params)
 
     except (ClientError, ParamValidationError, MissingParametersError) as e:
         module.fail_json(msg="Error creating HTTP method {0} rid: {1}: {2}".format(http_method, resource_id, e))
@@ -510,9 +538,16 @@ def put_integration(client, module, rest_api_id, resource_id, http_method, integ
     if 'httpMethod' in integration:
         api_params['integrationHttpMethod'] = integration['httpMethod']
 
-    for optional_params in ('uri', 'credentials', 'requestParameters', 'requestTemplates', 'cacheNameSpace', 'cacheKeyParameters'):
+    for optional_params in ('uri', 'credentials', 'requestParameters', 'requestTemplates', 'cacheNameSpace'):
         if optional_params in integration:
             api_params[optional_params] = integration[optional_params]
+
+    if 'cacheKeyParameters' in integration:
+        cache_key_parameters = []
+        for parameter in integration['cacheKeyParameters']:
+            cache_key_parameters.append('method.request.querystring.{0}'.format(parameter.split('.')[-1]))
+        if cache_key_parameters:
+            api_params['cacheKeyParameters'] = cache_key_parameters
 
     try:
         method_integration = client.put_integration(**api_params)
@@ -628,7 +663,7 @@ def crawl_tree(client, module, node):
         node.resource_id = resource['id']
 
         for http_method in node.http_methods():
-            put_method(client, module, node.rest_api_id, node.resource_id, http_method)
+            put_method(client, module, node.rest_api_id, node.resource_id, http_method, node.http_method(http_method))
             for status_code in node.http_method_responses(http_method):
                 put_method_response(client, module, node.rest_api_id, node.resource_id, http_method, status_code, node.http_method_response(http_method, status_code))
 
