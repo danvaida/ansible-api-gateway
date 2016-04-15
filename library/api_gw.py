@@ -472,18 +472,35 @@ def put_method(client, module, rest_api_id, resource_id, http_method, method_par
     else:
         api_params['authorizationType'] = 'NONE'
 
-    for optional_params in ('authorizerId', 'apiKeyRequired', 'requestModels'):
-        if optional_params in method_params:
-            api_params[optional_params] = method_params[optional_params]
+    #TODO: add support for custom authorizers type='CUSTOM'
 
+    if 'security' in method_params:
+        for item_dict in method_params['security']:
+            if 'api_key' in item_dict:
+                api_params['apiKeyRequired'] = True
+
+    if 'consumes' in method_params:
+        content_types = list(method_params['consumes'])
+    else:
+        content_types = []
+
+    request_models = []
     if 'parameters' in method_params:
         request_parameters = dict()
         for parameter in method_params['parameters']:
             if parameter['in'] == 'query':
                 destination = 'method.request.{0}.{1}'.format('querystring', parameter['name'])
                 request_parameters[destination] = parameter['required']
+            elif parameter['in'] in ('header', 'path'):
+                destination = 'method.request.{0}.{1}'.format(parameter['in'], parameter['name'])
+                request_parameters[destination] = parameter['required']
+            elif parameter['in'] == 'body' and '$ref' in parameter.get('schema', []):
+                request_models.append(parameter['schema']['$ref'].split('/')[-1])
         if request_parameters:
             api_params['requestParameters'] = request_parameters
+
+    if len(content_types) == len(request_models):
+        api_params['requestModels'] = dict(zip(content_types, request_models))
 
     try:
         method = client.put_method(**api_params)
