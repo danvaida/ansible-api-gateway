@@ -457,13 +457,14 @@ def create_resource(client, module, rest_api_id, parent_id, path_part):
     return resource
 
 
-def put_method(client, module, rest_api_id, resource_id, http_method, method_params):
+def put_method(client, module, node, http_method):
 
-    method = None
+    method_params = node.http_method(http_method)
+    security = node.security
 
     api_params = dict(
-            restApiId=rest_api_id,
-            resourceId=resource_id,
+            restApiId=node.rest_api_id,
+            resourceId=node.resource_id,
             httpMethod=http_method
     )
 
@@ -478,12 +479,17 @@ def put_method(client, module, rest_api_id, resource_id, http_method, method_par
         for item_dict in method_params['security']:
             if 'api_key' in item_dict:
                 api_params['apiKeyRequired'] = True
+            if 'sigv4' in item_dict and 'sigv4' in security:
+                print "###### SIGV4  "
 
     if 'consumes' in method_params:
         content_types = list(method_params['consumes'])
     else:
         content_types = []
 
+    # Iterate through parameters, which can be of types querystring, header, path or body.
+    # The 'body' parameters are used in combination with consumed content_types to establish the
+    # 'requestModels' mappings.
     request_models = []
     if 'parameters' in method_params:
         request_parameters = dict()
@@ -499,6 +505,7 @@ def put_method(client, module, rest_api_id, resource_id, http_method, method_par
         if request_parameters:
             api_params['requestParameters'] = request_parameters
 
+    # sanity check, making sure both lists are equal in length before assigning the mappings
     if len(content_types) == len(request_models):
         api_params['requestModels'] = dict(zip(content_types, request_models))
 
@@ -506,7 +513,8 @@ def put_method(client, module, rest_api_id, resource_id, http_method, method_par
         method = client.put_method(**api_params)
 
     except (ClientError, ParamValidationError, MissingParametersError) as e:
-        module.fail_json(msg="Error creating HTTP method {0} rid: {1}: {2}".format(http_method, resource_id, e))
+        method = None
+        module.fail_json(msg="Error creating HTTP method {0} rid: {1}: {2}".format(http_method, node.resource_id, e))
 
     return method
 
@@ -682,7 +690,7 @@ def crawl_tree(client, module, node):
         node.resource_id = resource['id']
 
         for http_method in node.http_methods():
-            put_method(client, module, node.rest_api_id, node.resource_id, http_method, node.http_method(http_method))
+            put_method(client, module, node, http_method)
             for status_code in node.http_method_responses(http_method):
                 put_method_response(client, module, node.rest_api_id, node.resource_id, http_method, status_code, node.http_method_response(http_method, status_code))
 
