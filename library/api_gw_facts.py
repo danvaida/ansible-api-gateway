@@ -26,8 +26,109 @@ options:
     description:
       - Specifies the resource type for which to gather facts.  Leave blank to retrieve all facts.
     required: true
-    choices: [ "all",  ]
+    choices: [ 'all', 'account', 'api_key', 'api_keys', 'base_path_mapping', 'base_path_mappings',
+               'client_certificate', 'client_certificates', 'deployment', 'deployments', 'domain_name',
+                'domain_names', 'integration', 'integration_response', 'method', 'method_response',
+                'model', 'model_template', 'models', 'resource', 'resources', 'rest_api', 'rest_apis',
+                'sdk', 'stage', 'stages'
+                ]
     default: "all"
+
+  rest_api_id
+    description:
+      - The identifier of the RestApi resource.
+    required: false
+    default: none
+
+  limit
+    description:
+      - The maximum number of RestApi resources in the collection to get information about.
+        The default limit is 25. It should be an integer between 1 - 500.
+    required: false
+    default: none
+  
+  position
+    description:
+      - The position of the current resource in the collection to get information about.
+    required: false
+    default: none
+
+  resource_id
+    description:
+      - The unique identifier for the resource within the API.
+    required: false
+    default: none
+
+  stage_name
+    description:
+      - The name of the Stage resource to get information about.
+    required: false
+    default: none
+
+  sdk_type
+    description:
+      - The language for the generated SDK. Currently javascript, android, and objectivec
+        (for iOS) are supported.
+    required: false
+    default: none
+
+  parameters
+    description:
+      - A key-value map of query string parameters that specify properties of the SDK,
+        depending on the requested sdkType. For sdkType 'objectivec', a parameter named
+        'classPrefix' is required. For sdkType 'android', parameters named 'groupId',
+        'artifactId', 'artifactVersion', and 'invokerPackage' are required.
+    required: false
+    default: none
+
+  flatten
+    description:
+      - Resolves all external model references and returns a flattened model schema.
+    required: false
+    default: none
+
+  http_method
+    description:
+      - Specifies the method request's HTTP method type.
+    required: false
+    default: none
+
+  status_code
+    description:
+      - The status code identifier for the MethodResponse resource.
+    required: false
+    default: none
+
+  deployment_id
+    description:
+      - The identifier of the Deployment resource to get information about.
+    required: false
+    default: none
+
+  domain_name
+    description:
+      - The name of the DomainName resource.
+    required: false
+    default: none
+
+  model_name
+    description:
+      - The name of the model as an identifier.
+    required: false
+    default: none
+
+  base_path
+    description:
+      - The base path name that callers of the API must provide as part of the URL
+        after the domain name.
+    required: false
+    default: none
+
+  client_certificate_id
+    description:
+      - The identifier of the ClientCertificate resource to be described.
+    required: false
+    default: none
 
 author: Pierre Jodouin (@pjodouin)
 requirements:
@@ -43,7 +144,7 @@ EXAMPLES = '''
 - name: List all for a specific function
   api_gw_facts:
     query: all
-    rest_api_id: '*'
+    rest_api_id: 'abcd123'
 
 - name: show api gateway facts
   debug: var=api_gw_facts
@@ -311,7 +412,6 @@ def main():
 
 
 # ansible import module(s) kept at ~eof as recommended
-
 from ansible.module_utils.basic import *
 from ansible.module_utils.ec2 import *
 
