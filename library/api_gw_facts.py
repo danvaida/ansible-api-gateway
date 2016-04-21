@@ -17,16 +17,41 @@
 DOCUMENTATION = '''
 ---
 module: api_gw_facts
+short_description: Gathers AWS API Gateway details as Ansible facts
+description:
+  - Gathers various details related to REST APIs.
+version_added: "2.1"
+options:
+  query:
+    description:
+      - Specifies the resource type for which to gather facts.  Leave blank to retrieve all facts.
+    required: true
+    choices: [ "all",  ]
+    default: "all"
+
+author: Pierre Jodouin (@pjodouin)
+requirements:
+    - boto3
+extends_documentation_fragment:
+    - aws
 
 '''
 
 EXAMPLES = '''
 ---
-- hosts: localhost
-  gather_facts: no
+# Simple example listing all info for a given rest_api_id
+- name: List all for a specific function
+  api_gw_facts:
+    query: all
+    rest_api_id: '*'
 
-  - name: display stuff
-    debug: var=results
+- name: show api gateway facts
+  debug: var=api_gw_facts
+'''
+
+RETURN = '''
+---
+
 '''
 
 API_CONFIG = dict(
@@ -173,7 +198,7 @@ def get_api_params(params, module, resource_type, required=False):
 def fix_return(node):
     """
     fixup returned dictionary
-    
+
     :param node:
     :return:
     """
@@ -235,7 +260,7 @@ def main():
 
     argument_spec = ec2_argument_spec()
     argument_spec.update(dict(
-        type=dict(required=False, choices=API_CONFIG.keys(), default='account'),
+        query=dict(required=False, choices=API_CONFIG.keys(), default='account'),
         rest_api_id=dict(default=None, required=False),
         limit=dict(type='int', default=None, required=False),
         position=dict(default=None, required=False),
