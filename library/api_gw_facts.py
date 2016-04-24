@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# This module is a candidate for Ansible module extras.
+# (c) 2016, Pierre Jodouin <pjodouin@virtualcomputing.solutions>
 #
 # Ansible is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -46,7 +46,7 @@ options:
         The default limit is 25. It should be an integer between 1 - 500.
     required: false
     default: none
-  
+
   position
     description:
       - The position of the current resource in the collection to get information about.

@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# This module is a candidate for Ansible module extras.
+# (c) 2016, Pierre Jodouin <pjodouin@virtualcomputing.solutions>
 #
 # Ansible is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -261,10 +261,7 @@ def get_api_params(module):
     """
     Check for presence of parameters, required or optional and change parameter case for API.
 
-    :param params: AWS parameters needed for API
     :param module: Ansible module reference
-    :param resource_type:
-    :param required:
     :return:
     """
     params = module.params['resource_params']
