@@ -411,6 +411,9 @@ def delete_rest_api(client, module, rest_api_id):
 
 
 def create_models(client, module, rest_api_id, schemas):
+    """
+    Creates models based on schemas.
+    """
 
     models = None
 
