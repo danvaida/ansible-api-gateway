@@ -823,9 +823,9 @@ def main():
         module.fail_json(msg="Connection Error - {0}".format(e))
 
     if module.params['rest_api_limit'] < 501:
-        AWS_REST_API_LIMIT  =  module.params['res_api_limit']
+        AWS_REST_API_LIMIT  =  module.params['rest_api_limit']
 
-    if module.params['resource_limit'] < 501:
+    if module.params['api_resource_limit'] < 501:
         AWS_API_RESOURCE_LIMIT  =  module.params['api_resource_limit']
 
     spec_file = module.params['swagger_spec']
